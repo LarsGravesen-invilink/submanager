@@ -14,7 +14,7 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-REPO_URL="https://github.com/LarsGravesen/submanager.git"
+REPO_URL="https://github.com/LarsGravesen-invilink/submanager.git"
 INSTALL_DIR="/opt/submanager"
 SERVICE_NAME="submanager"
 DB_NAME="submanager_db"
