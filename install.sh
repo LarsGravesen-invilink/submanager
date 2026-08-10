@@ -199,6 +199,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     unique_hits INTEGER NOT NULL DEFAULT 0,
     total_hits INTEGER NOT NULL DEFAULT 0,
     logo_url TEXT DEFAULT '',
+    logo_size TEXT DEFAULT 'medium',
     page_title TEXT DEFAULT ''
 );
 

@@ -28,6 +28,7 @@ export default async function SubscriptionPublicPage({
       slug={sub.slug}
       title={sub.pageTitle || sub.title || sub.name}
       logoUrl={sub.logoUrl || ""}
+      logoSize={sub.logoSize || "medium"}
       expiresAt={sub.expiresAt ? sub.expiresAt.toISOString() : null}
       isActive={sub.isActive}
     />

@@ -39,6 +39,7 @@ export const subscriptions = pgTable("subscriptions", {
   uniqueHits: integer("unique_hits").notNull().default(0),
   totalHits: integer("total_hits").notNull().default(0),
   logoUrl: text("logo_url").default(""),
+  logoSize: text("logo_size").default("medium"), // 'small' | 'medium' | 'large'
   pageTitle: text("page_title").default(""),
 });
 

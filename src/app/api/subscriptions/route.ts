@@ -36,6 +36,7 @@ export async function POST(req: Request) {
     clientUpdateHours,
     expiresAt,
     logoUrl,
+    logoSize,
     pageTitle,
   } = body;
 
@@ -58,6 +59,7 @@ export async function POST(req: Request) {
       clientUpdateHours: clientUpdateHours || 24,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       logoUrl: logoUrl || "",
+      logoSize: logoSize || "medium",
       pageTitle: pageTitle || "",
     })
     .returning();

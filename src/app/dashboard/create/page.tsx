@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 interface ManualKey {
@@ -35,16 +35,26 @@ export default function CreateSubscriptionPage() {
   const [remoteSources, setRemoteSources] = useState<RemoteSource[]>([]);
   const [autoUpdateMinutes, setAutoUpdateMinutes] = useState(60);
   const [clientUpdateHours, setClientUpdateHours] = useState(24);
-  const [expiryType, setExpiryType] = useState<"none" | "custom">("none");
-  const [expiryValue, setExpiryValue] = useState(30);
-  const [expiryUnit, setExpiryUnit] = useState<"hours" | "days" | "months" | "years">("days");
+  
+  // Improved expiry settings
+  const [expiryType, setExpiryType] = useState<"none" | "months" | "days" | "hours">("none");
+  const [expiryMonths, setExpiryMonths] = useState(1);
+  const [expiryDays, setExpiryDays] = useState(30);
+  const [expiryHours, setExpiryHours] = useState(24);
+  const [expiryMinutes, setExpiryMinutes] = useState(0);
+  
+  // Logo settings
   const [logoUrl, setLogoUrl] = useState("");
+  const [logoSize, setLogoSize] = useState<"small" | "medium" | "large">("medium");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const [pageTitle, setPageTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
-  // Auth check
   useEffect(() => {
     fetch("/api/auth/check")
       .then((r) => r.json())
@@ -71,7 +81,6 @@ export default function CreateSubscriptionPage() {
           e.id === id ? { ...e, value, type: detectType(value) } : e
         );
 
-        // If the detected type is subscription_url, add to remote sources
         const entry = updated.find((e) => e.id === id);
         if (entry && entry.type === "subscription_url" && value.trim()) {
           const alreadyExists = remoteSources.some(
@@ -79,7 +88,6 @@ export default function CreateSubscriptionPage() {
           );
           if (!alreadyExists) {
             fetchRemoteSource(value.trim());
-            // Remove from entries
             const filtered = updated.filter((e) => e.id !== id);
             if (
               filtered.length === 0 ||
@@ -96,7 +104,6 @@ export default function CreateSubscriptionPage() {
           }
         }
 
-        // Add new empty entry if last one has content
         if (updated[updated.length - 1]?.value.trim()) {
           updated.push({
             id: crypto.randomUUID(),
@@ -206,21 +213,43 @@ export default function CreateSubscriptionPage() {
   const calculateExpiryDate = (): string | null => {
     if (expiryType === "none") return null;
     const now = new Date();
-    switch (expiryUnit) {
-      case "hours":
-        now.setHours(now.getHours() + expiryValue);
+    switch (expiryType) {
+      case "months":
+        now.setMonth(now.getMonth() + expiryMonths);
         break;
       case "days":
-        now.setDate(now.getDate() + expiryValue);
+        now.setDate(now.getDate() + expiryDays);
         break;
-      case "months":
-        now.setMonth(now.getMonth() + expiryValue);
-        break;
-      case "years":
-        now.setFullYear(now.getFullYear() + expiryValue);
+      case "hours":
+        now.setHours(now.getHours() + expiryHours);
+        now.setMinutes(now.getMinutes() + expiryMinutes);
         break;
     }
     return now.toISOString();
+  };
+
+  // Logo file handling
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setLogoFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const result = ev.target?.result as string;
+      setLogoPreview(result);
+      setLogoUrl(result); // Use data URL
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeLogo = () => {
+    setLogoFile(null);
+    setLogoPreview("");
+    setLogoUrl("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleSave = async () => {
@@ -265,6 +294,7 @@ export default function CreateSubscriptionPage() {
           clientUpdateHours,
           expiresAt: calculateExpiryDate(),
           logoUrl,
+          logoSize,
           pageTitle,
         }),
       });
@@ -279,6 +309,12 @@ export default function CreateSubscriptionPage() {
       setError("Ошибка сети");
     }
     setSaving(false);
+  };
+
+  const logoSizeLabels = {
+    small: "Маленький",
+    medium: "Средний", 
+    large: "Большой",
   };
 
   return (
@@ -359,11 +395,6 @@ export default function CreateSubscriptionPage() {
                         Ключ
                       </span>
                     )}
-                    {entry.type === "unknown" && entry.value.trim() && (
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs bg-yellow-500/10 text-yellow-400 px-2 py-0.5 rounded-full border border-yellow-500/20">
-                        ???
-                      </span>
-                    )}
                   </div>
                   {entry.type === "key" && (
                     <input
@@ -420,7 +451,7 @@ export default function CreateSubscriptionPage() {
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                           </svg>
-                          {src.keys.length} ключей
+                          {src.keys.filter(k => k.selected).length}/{src.keys.length}
                         </span>
                       )}
                       {src.status === "error" && (
@@ -434,12 +465,10 @@ export default function CreateSubscriptionPage() {
                       {src.status === "ok" && (
                         <button
                           onClick={() => toggleSourceEditor(src.id)}
-                          className="text-graphite-400 hover:text-accent-400 transition-colors"
+                          className="px-2 py-1 text-xs bg-graphite-700 hover:bg-graphite-600 text-graphite-300 rounded-lg transition-colors"
                           title="Редактировать ключи"
                         >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
+                          Выбрать ключи
                         </button>
                       )}
                       <button
@@ -453,7 +482,6 @@ export default function CreateSubscriptionPage() {
                     </div>
                   </div>
 
-                  {/* Source editor modal */}
                   {src.showEditor && (
                     <SourceEditorModal
                       source={src}
@@ -468,10 +496,88 @@ export default function CreateSubscriptionPage() {
           )}
         </section>
 
-        {/* Settings */}
+        {/* Expiry Settings - Improved */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 animate-fade-in">
           <h2 className="text-lg font-semibold text-graphite-100 mb-4">
-            Настройки
+            Срок действия
+          </h2>
+          
+          <div className="flex flex-wrap gap-2 mb-4">
+            {(["none", "months", "days", "hours"] as const).map((type) => (
+              <button
+                key={type}
+                onClick={() => setExpiryType(type)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  expiryType === type
+                    ? "bg-accent-500 text-white"
+                    : "bg-graphite-800 text-graphite-400 hover:text-graphite-200 border border-graphite-700"
+                }`}
+              >
+                {type === "none" && "Бессрочно"}
+                {type === "months" && "Месяцы"}
+                {type === "days" && "Дни"}
+                {type === "hours" && "Часы"}
+              </button>
+            ))}
+          </div>
+
+          {expiryType === "months" && (
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                value={expiryMonths}
+                onChange={(e) => setExpiryMonths(Number(e.target.value) || 1)}
+                onFocus={(e) => e.target.select()}
+                className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
+              />
+              <span className="text-graphite-400">месяц(ев)</span>
+            </div>
+          )}
+
+          {expiryType === "days" && (
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                value={expiryDays}
+                onChange={(e) => setExpiryDays(Number(e.target.value) || 1)}
+                onFocus={(e) => e.target.select()}
+                className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
+              />
+              <span className="text-graphite-400">дней</span>
+            </div>
+          )}
+
+          {expiryType === "hours" && (
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={0}
+                value={expiryHours}
+                onChange={(e) => setExpiryHours(Number(e.target.value) || 0)}
+                onFocus={(e) => e.target.select()}
+                className="w-20 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
+              />
+              <span className="text-graphite-400">ч.</span>
+              <input
+                type="number"
+                min={0}
+                max={59}
+                value={expiryMinutes}
+                onChange={(e) => setExpiryMinutes(Number(e.target.value) || 0)}
+                onFocus={(e) => e.target.select()}
+                className="w-20 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
+              />
+              <span className="text-graphite-400">мин.</span>
+            </div>
+          )}
+        </section>
+
+        {/* Update Settings */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 animate-fade-in">
+          <h2 className="text-lg font-semibold text-graphite-100 mb-4">
+            Автообновление
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -499,80 +605,92 @@ export default function CreateSubscriptionPage() {
               />
             </div>
           </div>
-
-          {/* Expiry */}
-          <div className="mt-4">
-            <label className="block text-sm text-graphite-400 mb-1.5">
-              Время жизни подписки
-            </label>
-            <div className="flex gap-3 items-center">
-              <select
-                value={expiryType}
-                onChange={(e) =>
-                  setExpiryType(e.target.value as "none" | "custom")
-                }
-                className="bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
-              >
-                <option value="none">Бессрочно</option>
-                <option value="custom">Указать</option>
-              </select>
-              {expiryType === "custom" && (
-                <>
-                  <input
-                    type="number"
-                    min={1}
-                    value={expiryValue}
-                    onChange={(e) => setExpiryValue(Number(e.target.value))}
-                    className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
-                  />
-                  <select
-                    value={expiryUnit}
-                    onChange={(e) =>
-                      setExpiryUnit(
-                        e.target.value as "hours" | "days" | "months" | "years"
-                      )
-                    }
-                    className="bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
-                  >
-                    <option value="hours">Часов</option>
-                    <option value="days">Дней</option>
-                    <option value="months">Месяцев</option>
-                    <option value="years">Лет</option>
-                  </select>
-                </>
-              )}
-            </div>
-          </div>
         </section>
 
-        {/* Page customization */}
+        {/* Page customization with logo upload */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 animate-fade-in">
           <h2 className="text-lg font-semibold text-graphite-100 mb-4">
             Оформление страницы
           </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-sm text-graphite-400 mb-1.5">
-                URL логотипа (PNG с прозрачностью)
-              </label>
+          
+          {/* Logo upload */}
+          <div className="mb-4">
+            <label className="block text-sm text-graphite-400 mb-1.5">
+              Логотип
+            </label>
+            <div className="flex items-start gap-4">
+              {logoPreview ? (
+                <div className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={logoPreview}
+                    alt="Logo preview"
+                    className={`object-contain bg-graphite-800 rounded-xl border border-graphite-700 ${
+                      logoSize === "small" ? "h-12" : logoSize === "medium" ? "h-20" : "h-32"
+                    }`}
+                  />
+                  <button
+                    onClick={removeLogo}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-32 h-20 border-2 border-dashed border-graphite-700 rounded-xl flex flex-col items-center justify-center text-graphite-500 hover:text-graphite-400 hover:border-graphite-600 transition-colors"
+                >
+                  <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-xs">Загрузить</span>
+                </button>
+              )}
+              
               <input
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all text-sm"
-                placeholder="https://example.com/logo.png"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoFileChange}
+                className="hidden"
               />
+
+              {logoPreview && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-graphite-500">Размер:</span>
+                  <div className="flex gap-1">
+                    {(["small", "medium", "large"] as const).map((size) => (
+                      <button
+                        key={size}
+                        onClick={() => setLogoSize(size)}
+                        className={`px-3 py-1 text-xs rounded-lg transition-all ${
+                          logoSize === size
+                            ? "bg-accent-500 text-white"
+                            : "bg-graphite-800 text-graphite-400 hover:text-graphite-200"
+                        }`}
+                      >
+                        {logoSizeLabels[size]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm text-graphite-400 mb-1.5">
-                Заголовок страницы
-              </label>
-              <input
-                value={pageTitle}
-                onChange={(e) => setPageTitle(e.target.value)}
-                className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all text-sm"
-                placeholder="Premium VPN Service"
-              />
-            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-graphite-400 mb-1.5">
+              Заголовок страницы
+            </label>
+            <input
+              value={pageTitle}
+              onChange={(e) => setPageTitle(e.target.value)}
+              className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all text-sm"
+              placeholder="Premium VPN Service"
+            />
           </div>
         </section>
 
@@ -627,10 +745,13 @@ function SourceEditorModal({
       <div className="bg-graphite-900 border border-graphite-800 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-slide-up shadow-2xl">
         <div className="p-6 border-b border-graphite-800">
           <h3 className="text-lg font-semibold text-graphite-100">
-            Ключи из источника
+            Выбор ключей из источника
           </h3>
           <p className="text-graphite-500 text-sm mt-1 truncate">
             {source.url}
+          </p>
+          <p className="text-graphite-400 text-xs mt-2">
+            Выбрано: {source.keys.filter(k => k.selected).length} из {source.keys.length}
           </p>
         </div>
 
@@ -638,7 +759,9 @@ function SourceEditorModal({
           {source.keys.map((key) => (
             <div
               key={key.fingerprint}
-              className="flex items-start gap-3 bg-graphite-800/50 rounded-xl p-3"
+              className={`flex items-start gap-3 rounded-xl p-3 transition-all ${
+                key.selected ? "bg-graphite-800/50" : "bg-graphite-800/20 opacity-50"
+              }`}
             >
               <label className="flex items-center mt-1 cursor-pointer">
                 <input
@@ -654,15 +777,9 @@ function SourceEditorModal({
                 </p>
                 <input
                   value={key.customName}
-                  onChange={(e) =>
-                    onSetName(key.fingerprint, e.target.value)
-                  }
+                  onChange={(e) => onSetName(key.fingerprint, e.target.value)}
                   className="mt-1.5 w-full bg-graphite-800 border border-graphite-700/50 rounded-lg px-3 py-1.5 text-sm text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30 transition-all"
-                  placeholder={
-                    key.name
-                      ? `Оригинальное: ${key.name}`
-                      : "Имя ключа в клиенте"
-                  }
+                  placeholder={key.name ? `Оригинальное: ${key.name}` : "Имя ключа в клиенте"}
                 />
               </div>
             </div>
@@ -677,15 +794,9 @@ function SourceEditorModal({
         <div className="p-6 border-t border-graphite-800 flex gap-3 justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-graphite-400 hover:text-graphite-200 bg-graphite-800 border border-graphite-700 transition-all text-sm"
-          >
-            Отмена
-          </button>
-          <button
-            onClick={onClose}
             className="px-6 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white font-medium transition-all text-sm"
           >
-            Сохранить
+            Готово
           </button>
         </div>
       </div>

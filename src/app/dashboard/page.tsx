@@ -19,6 +19,8 @@ export default function DashboardPage() {
   const [subs, setSubs] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
+  const [extendModal, setExtendModal] = useState<Subscription | null>(null);
+  const [extendDays, setExtendDays] = useState(30);
   const router = useRouter();
 
   const loadSubs = useCallback(async () => {
@@ -65,6 +67,23 @@ export default function DashboardPage() {
     loadSubs();
   };
 
+  const extendSubscription = async () => {
+    if (!extendModal) return;
+    const newExpiry = new Date();
+    newExpiry.setDate(newExpiry.getDate() + extendDays);
+    
+    await fetch(`/api/subscriptions/${extendModal.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        expiresAt: newExpiry.toISOString(),
+        isActive: true 
+      }),
+    });
+    setExtendModal(null);
+    loadSubs();
+  };
+
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
@@ -73,6 +92,20 @@ export default function DashboardPage() {
   const isExpired = (expiresAt: string | null) => {
     if (!expiresAt) return false;
     return new Date(expiresAt) < new Date();
+  };
+
+  const getTimeRemaining = (expiresAt: string) => {
+    const now = new Date().getTime();
+    const exp = new Date(expiresAt).getTime();
+    const diff = exp - now;
+    
+    if (diff <= 0) return "Истекла";
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    if (days > 0) return `${days} д. ${hours} ч.`;
+    return `${hours} ч.`;
   };
 
   if (loading) {
@@ -148,137 +181,197 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="grid gap-4">
-            {subs.map((sub, i) => (
-              <div
-                key={sub.id}
-                className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 hover:border-graphite-700 transition-all animate-fade-in group"
-                style={{ animationDelay: `${i * 50}ms` }}
-              >
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold text-graphite-100 truncate">
-                        {sub.name}
-                      </h3>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          !sub.isActive
-                            ? "bg-graphite-700 text-graphite-400"
-                            : isExpired(sub.expiresAt)
-                            ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                            : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        }`}
-                      >
-                        {!sub.isActive
-                          ? "Приостановлена"
-                          : isExpired(sub.expiresAt)
-                          ? "Истекла"
-                          : "Активна"}
-                      </span>
-                    </div>
-                    {sub.title && (
-                      <p className="text-graphite-400 text-sm mb-2 truncate">
-                        {sub.title}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-4 text-xs text-graphite-500">
-                      <span className="flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        {sub.uniqueHits} уник. / {sub.totalHits} всего
-                      </span>
-                      {sub.expiresAt && (
-                        <span>
-                          До:{" "}
-                          {new Date(sub.expiresAt).toLocaleDateString("ru-RU")}
+            {subs.map((sub, i) => {
+              const expired = isExpired(sub.expiresAt);
+              return (
+                <div
+                  key={sub.id}
+                  className={`bg-graphite-900 border rounded-2xl p-5 transition-all animate-fade-in group ${
+                    expired
+                      ? "border-red-500/50 bg-red-500/5"
+                      : !sub.isActive
+                      ? "border-graphite-700 opacity-60"
+                      : "border-graphite-800 hover:border-graphite-700"
+                  }`}
+                  style={{ animationDelay: `${i * 50}ms` }}
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className={`text-lg font-semibold truncate ${expired ? "text-red-400" : "text-graphite-100"}`}>
+                          {sub.name}
+                        </h3>
+                        {expired ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                            Истекла
+                          </span>
+                        ) : !sub.isActive ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-graphite-700 text-graphite-400">
+                            Приостановлена
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            Активна
+                          </span>
+                        )}
+                      </div>
+                      {sub.title && (
+                        <p className="text-graphite-400 text-sm mb-2 truncate">
+                          {sub.title}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-4 text-xs text-graphite-500">
+                        <span className="flex items-center gap-1">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          {sub.uniqueHits} уник. / {sub.totalHits} всего
                         </span>
-                      )}
-                      <span>
-                        Создана:{" "}
-                        {new Date(sub.createdAt).toLocaleDateString("ru-RU")}
-                      </span>
+                        {sub.expiresAt && (
+                          <span className={expired ? "text-red-400" : ""}>
+                            {expired ? "Истекла: " : "Осталось: "}
+                            {expired 
+                              ? new Date(sub.expiresAt).toLocaleDateString("ru-RU")
+                              : getTimeRemaining(sub.expiresAt)
+                            }
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => copyLink(sub.slug)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
-                        copied === sub.slug
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                          : "bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30"
-                      }`}
-                      title="Копировать ссылку"
-                    >
-                      {copied === sub.slug ? (
-                        <>
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                      {expired && (
+                        <button
+                          onClick={() => setExtendModal(sub)}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all"
+                        >
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="hidden sm:inline">Скопировано</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                          </svg>
-                          <span className="hidden sm:inline">Ссылка</span>
-                        </>
+                          Продлить
+                        </button>
                       )}
-                    </button>
+                      
+                      <button
+                        onClick={() => copyLink(sub.slug)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                          copied === sub.slug
+                            ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                            : "bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30"
+                        }`}
+                        title="Копировать ссылку"
+                      >
+                        {copied === sub.slug ? (
+                          <>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span className="hidden sm:inline">Скопировано</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            <span className="hidden sm:inline">Ссылка</span>
+                          </>
+                        )}
+                      </button>
 
-                    <button
-                      onClick={() => router.push(`/dashboard/edit/${sub.id}`)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30 transition-all"
-                      title="Редактировать"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      <span className="hidden sm:inline">Изменить</span>
-                    </button>
+                      <button
+                        onClick={() => router.push(`/dashboard/edit/${sub.id}`)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30 transition-all"
+                        title="Редактировать"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span className="hidden sm:inline">Изменить</span>
+                      </button>
 
-                    <button
-                      onClick={() => toggleActive(sub.id, sub.isActive)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
-                        sub.isActive
-                          ? "bg-graphite-800 text-yellow-400 border-graphite-700 hover:border-yellow-500/30"
-                          : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
-                      }`}
-                      title={sub.isActive ? "Приостановить" : "Возобновить"}
-                    >
-                      {sub.isActive ? (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                      {!expired && (
+                        <button
+                          onClick={() => toggleActive(sub.id, sub.isActive)}
+                          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+                            sub.isActive
+                              ? "bg-graphite-800 text-yellow-400 border-graphite-700 hover:border-yellow-500/30"
+                              : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                          }`}
+                          title={sub.isActive ? "Приостановить" : "Возобновить"}
+                        >
+                          {sub.isActive ? (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          )}
+                        </button>
                       )}
-                    </button>
 
-                    <button
-                      onClick={() => deleteSub(sub.id, sub.name)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-red-400 border border-graphite-700 hover:border-red-500/30 hover:bg-red-500/10 transition-all"
-                      title="Удалить"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                      <button
+                        onClick={() => deleteSub(sub.id, sub.name)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-red-400 border border-graphite-700 hover:border-red-500/30 hover:bg-red-500/10 transition-all"
+                        title="Удалить"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
+
+      {/* Extend Modal */}
+      {extendModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
+            <h3 className="text-lg font-semibold text-graphite-100 mb-4">
+              Продлить подписку
+            </h3>
+            <p className="text-graphite-400 text-sm mb-4">
+              {extendModal.name}
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm text-graphite-400 mb-1.5">
+                Продлить на (дней)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={extendDays}
+                onChange={(e) => setExtendDays(Number(e.target.value))}
+                className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setExtendModal(null)}
+                className="flex-1 py-3 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-300 hover:text-graphite-100 transition-all font-medium"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={extendSubscription}
+                className="flex-1 py-3 rounded-xl bg-accent-500 hover:bg-accent-600 text-white font-medium transition-all"
+              >
+                Продлить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -45,12 +45,14 @@ export default function SubPageClient({
   slug,
   title,
   logoUrl,
+  logoSize,
   expiresAt,
   isActive,
 }: {
   slug: string;
   title: string;
   logoUrl: string;
+  logoSize: string;
   expiresAt: string | null;
   isActive: boolean;
 }) {
@@ -60,12 +62,13 @@ export default function SubPageClient({
   const [showClients, setShowClients] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [timeLeft, setTimeLeft] = useState("");
+  const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
     setSubUrl(`${window.location.origin}/api/sub/${slug}`);
   }, [slug]);
 
-  // Countdown timer
+  // Check expiry and countdown timer
   useEffect(() => {
     if (!expiresAt) return;
 
@@ -76,13 +79,13 @@ export default function SubPageClient({
 
       if (diff <= 0) {
         setTimeLeft("Истекла");
+        setIsExpired(true);
         return;
       }
 
+      setIsExpired(false);
       const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor(
-        (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
-      );
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
       const parts = [];
@@ -119,21 +122,54 @@ export default function SubPageClient({
     setShowClients(false);
   };
 
+  const logoSizeClass = {
+    small: "h-12",
+    medium: "h-20",
+    large: "h-32",
+  }[logoSize] || "h-16";
+
+  // Paused subscription
   if (!isActive) {
     return (
       <div className="min-h-screen bg-graphite-950 flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-graphite-900 border border-graphite-800 flex items-center justify-center">
-            <svg className="w-8 h-8 text-graphite-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <div className="text-center animate-fade-in">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-yellow-500/10 border-2 border-yellow-500/30 flex items-center justify-center">
+            <svg className="w-10 h-10 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold text-graphite-300">
+          <h1 className="text-2xl font-bold text-graphite-200 mb-2">
             Подписка приостановлена
           </h1>
-          <p className="text-graphite-500 text-sm mt-2">
-            Свяжитесь с администратором
+          <p className="text-graphite-500 text-sm">
+            Свяжитесь с администратором для возобновления
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Expired subscription
+  if (isExpired) {
+    return (
+      <div className="min-h-screen bg-graphite-950 flex items-center justify-center px-4">
+        <div className="text-center animate-fade-in max-w-md">
+          <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center">
+            <svg className="w-14 h-14 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-red-400 mb-3">
+            Истёк срок использования подписки
+          </h1>
+          <p className="text-graphite-400 text-sm leading-relaxed">
+            Для продления обратитесь к владельцу сервиса
+          </p>
+          <div className="mt-6 px-4 py-3 bg-graphite-900 border border-graphite-800 rounded-xl">
+            <p className="text-graphite-500 text-xs">
+              Срок действия истёк: {new Date(expiresAt!).toLocaleString("ru-RU")}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -149,7 +185,7 @@ export default function SubPageClient({
             <img
               src={logoUrl}
               alt="Logo"
-              className="h-16 w-auto mx-auto object-contain"
+              className={`${logoSizeClass} w-auto mx-auto object-contain`}
             />
           </div>
         )}
@@ -165,7 +201,7 @@ export default function SubPageClient({
           )}
           <h1 className="text-2xl font-bold text-graphite-50">{title}</h1>
 
-          {expiresAt && (
+          {expiresAt && !isExpired && (
             <div className="mt-4 inline-flex items-center gap-2 bg-graphite-900 border border-graphite-800 rounded-xl px-4 py-2">
               <svg className="w-4 h-4 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
