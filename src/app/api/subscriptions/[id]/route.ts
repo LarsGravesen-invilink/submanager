@@ -74,7 +74,15 @@ export async function PUT(
   if (body.expiresAt !== undefined)
     updateData.expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
   if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl;
+  if (body.logoSize !== undefined) updateData.logoSize = body.logoSize;
   if (body.pageTitle !== undefined) updateData.pageTitle = body.pageTitle;
+  if (body.showExpiry !== undefined) updateData.showExpiry = body.showExpiry;
+  if (body.showUpload !== undefined) updateData.showUpload = body.showUpload;
+  if (body.showDownload !== undefined) updateData.showDownload = body.showDownload;
+  if (body.showTotal !== undefined) updateData.showTotal = body.showTotal;
+  if (body.totalTrafficGb !== undefined) updateData.totalTrafficGb = body.totalTrafficGb;
+  if (body.usedUploadGb !== undefined) updateData.usedUploadGb = body.usedUploadGb;
+  if (body.usedDownloadGb !== undefined) updateData.usedDownloadGb = body.usedDownloadGb;
 
   const [sub] = await db
     .update(subscriptions)

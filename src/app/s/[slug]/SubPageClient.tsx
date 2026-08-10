@@ -266,7 +266,7 @@ export default function SubPageClient({
         </div>
 
         <p className="text-center text-graphite-700 text-xs mt-8">
-          SubManager — Безопасные VPN подписки
+          SubManager by LarsGravesen
         </p>
       </div>
 

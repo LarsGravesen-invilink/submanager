@@ -41,6 +41,14 @@ export const subscriptions = pgTable("subscriptions", {
   logoUrl: text("logo_url").default(""),
   logoSize: text("logo_size").default("medium"), // 'small' | 'medium' | 'large'
   pageTitle: text("page_title").default(""),
+  // Client display settings JSON
+  showExpiry: boolean("show_expiry").notNull().default(true),
+  showUpload: boolean("show_upload").notNull().default(false),
+  showDownload: boolean("show_download").notNull().default(false),
+  showTotal: boolean("show_total").notNull().default(false),
+  totalTrafficGb: integer("total_traffic_gb").notNull().default(0),
+  usedUploadGb: integer("used_upload_gb").notNull().default(0),
+  usedDownloadGb: integer("used_download_gb").notNull().default(0),
 });
 
 // Subscription keys - individual VPN keys

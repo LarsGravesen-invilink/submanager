@@ -8,33 +8,13 @@ import {
 import { eq, sql } from "drizzle-orm";
 
 function isLikelyBrowser(ua: string): boolean {
-  const browserPatterns = [
-    /mozilla/i,
-    /chrome/i,
-    /safari/i,
-    /firefox/i,
-    /edge/i,
-    /opera/i,
-  ];
   const clientPatterns = [
-    /clash/i,
-    /v2ray/i,
-    /surge/i,
-    /quantumult/i,
-    /shadowrocket/i,
-    /hiddify/i,
-    /nekobox/i,
-    /nekoray/i,
-    /sing-box/i,
-    /stash/i,
-    /happ/i,
-    /incy/i,
-    /podkop/i,
-    /forkop/i,
-    /streisand/i,
+    /clash/i, /v2ray/i, /surge/i, /quantumult/i, /shadowrocket/i,
+    /hiddify/i, /nekobox/i, /nekoray/i, /sing-box/i, /stash/i,
+    /happ/i, /incy/i, /podkop/i, /forkop/i, /streisand/i,
   ];
-
   if (clientPatterns.some((p) => p.test(ua))) return false;
+  const browserPatterns = [/mozilla/i, /chrome/i, /safari/i, /firefox/i, /edge/i, /opera/i];
   if (browserPatterns.some((p) => p.test(ua))) return true;
   return false;
 }
@@ -42,63 +22,49 @@ function isLikelyBrowser(ua: string): boolean {
 function detectDeviceType(ua: string): string {
   if (!ua) return "unknown";
   const clientPatterns: [RegExp, string][] = [
-    [/clash/i, "Clash"],
-    [/v2rayn/i, "V2RayN"],
-    [/v2rayng/i, "V2RayNG"],
-    [/v2ray/i, "V2Ray"],
-    [/surge/i, "Surge"],
-    [/quantumult/i, "Quantumult"],
-    [/shadowrocket/i, "Shadowrocket"],
-    [/hiddify/i, "Hiddify"],
-    [/nekobox/i, "NekoBox"],
-    [/nekoray/i, "NekoRay"],
-    [/sing-box/i, "sing-box"],
-    [/stash/i, "Stash"],
-    [/happ/i, "Happ"],
-    [/incy/i, "Incy"],
-    [/podkop/i, "Podkop"],
-    [/forkop/i, "Forkop"],
-    [/streisand/i, "Streisand"],
+    [/clash/i, "Clash"], [/v2rayn/i, "V2RayN"], [/v2rayng/i, "V2RayNG"],
+    [/v2ray/i, "V2Ray"], [/surge/i, "Surge"], [/quantumult/i, "Quantumult"],
+    [/shadowrocket/i, "Shadowrocket"], [/hiddify/i, "Hiddify"],
+    [/nekobox/i, "NekoBox"], [/nekoray/i, "NekoRay"], [/sing-box/i, "sing-box"],
+    [/stash/i, "Stash"], [/happ/i, "Happ"], [/incy/i, "Incy"],
+    [/podkop/i, "Podkop"], [/forkop/i, "Forkop"], [/streisand/i, "Streisand"],
   ];
-
   for (const [pattern, name] of clientPatterns) {
     if (pattern.test(ua)) return name;
   }
-
   if (/mobile|android|iphone/i.test(ua)) return "Браузер (мобильный)";
   return "Браузер";
 }
 
-// Proper URL encoding for key names with emoji support
-function encodeKeyName(name: string): string {
-  try {
-    return encodeURIComponent(name);
-  } catch {
-    return name;
-  }
-}
-
-// Set name on a VPN key with proper encoding
-function setKeyNameEncoded(key: string, name: string): string {
+/**
+ * Sets name on a VPN key.
+ * For vmess:// -> sets ps field in base64 JSON.
+ * For all others (vless://, trojan://, ss://, hy2://, etc.) -> URL fragment with percent-encoding.
+ * 
+ * IMPORTANT: encodeURIComponent encodes UTF-8 bytes to percent-encoded format,
+ * which is the standard that ALL clients understand correctly for URL fragments.
+ * Emoji, Russian, Chinese, etc. are all encoded as %XX sequences.
+ */
+function setKeyNameForClient(key: string, name: string): string {
   const trimmed = key.trim();
 
-  // Handle vmess:// base64 JSON format
+  // vmess:// uses base64-encoded JSON, name is in "ps" field as raw UTF-8
   if (trimmed.startsWith("vmess://")) {
     try {
       const b64 = trimmed.slice(8);
       const decoded = Buffer.from(b64, "base64").toString("utf-8");
       const json = JSON.parse(decoded);
-      json.ps = name; // ps field for vmess name
+      json.ps = name;
       return "vmess://" + Buffer.from(JSON.stringify(json), "utf-8").toString("base64");
     } catch {
-      // fallback to fragment method
+      // fallback
     }
   }
 
-  // For other protocols, use URL fragment with proper encoding
+  // For all URL-style protocols: name goes after # as percent-encoded UTF-8
   const hashIdx = trimmed.lastIndexOf("#");
-  const keyWithoutName = hashIdx !== -1 ? trimmed.slice(0, hashIdx) : trimmed;
-  return keyWithoutName + "#" + encodeKeyName(name);
+  const keyBody = hashIdx !== -1 ? trimmed.slice(0, hashIdx) : trimmed;
+  return keyBody + "#" + encodeURIComponent(name);
 }
 
 export async function GET(
@@ -151,57 +117,52 @@ export async function GET(
     })
     .where(eq(subscriptions.id, sub.id));
 
-  // Check if paused
-  if (!sub.isActive) {
-    if (isBrowser) {
-      const baseUrl =
-        req.headers.get("x-forwarded-proto") === "https"
-          ? `https://${req.headers.get("host")}`
-          : `${req.nextUrl.protocol}//${req.headers.get("host")}`;
-      return NextResponse.redirect(`${baseUrl}/s/${slug}`);
-    }
-    // Return empty subscription with message for VPN clients
-    const expiredContent = "# Подписка приостановлена";
-    return new NextResponse(Buffer.from(expiredContent).toString("base64"), {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Profile-Title": Buffer.from("⏸️ Приостановлено", "utf-8").toString("base64"),
-      },
-    });
-  }
-
-  // Check expiry
-  const isExpired = sub.expiresAt && new Date(sub.expiresAt) < new Date();
-  
-  if (isExpired) {
-    if (isBrowser) {
-      const baseUrl =
-        req.headers.get("x-forwarded-proto") === "https"
-          ? `https://${req.headers.get("host")}`
-          : `${req.nextUrl.protocol}//${req.headers.get("host")}`;
-      return NextResponse.redirect(`${baseUrl}/s/${slug}`);
-    }
-    // Return message for VPN clients when expired
-    const expiredContent = "# Подписка истекла";
-    return new NextResponse(Buffer.from(expiredContent).toString("base64"), {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Profile-Title": Buffer.from("❌ Подписка истекла", "utf-8").toString("base64"),
-        "Subscription-Userinfo": `upload=0; download=0; total=0; expire=${Math.floor(new Date(sub.expiresAt!).getTime() / 1000)}`,
-      },
-    });
-  }
-
-  // If browser, redirect to the subscription page
-  if (isBrowser) {
+  // Helper
+  const redirectToBrowserPage = () => {
     const baseUrl =
       req.headers.get("x-forwarded-proto") === "https"
         ? `https://${req.headers.get("host")}`
         : `${req.nextUrl.protocol}//${req.headers.get("host")}`;
     return NextResponse.redirect(`${baseUrl}/s/${slug}`);
+  };
+
+  // Build common profile title as base64 UTF-8
+  const encodeTitle = (text: string) =>
+    Buffer.from(text, "utf-8").toString("base64");
+
+  // ==== Paused ====
+  if (!sub.isActive) {
+    if (isBrowser) return redirectToBrowserPage();
+    return new NextResponse("", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Profile-Title": encodeTitle("Подписка приостановлена"),
+        "Profile-Update-Interval": "1",
+      },
+    });
   }
 
-  // For VPN clients, return keys
+  // ==== Expired ====
+  const isExpired = sub.expiresAt && new Date(sub.expiresAt) < new Date();
+
+  if (isExpired) {
+    if (isBrowser) return redirectToBrowserPage();
+    return new NextResponse("", {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Profile-Title": encodeTitle("Подписка истекла"),
+        "Subscription-Userinfo": `upload=0; download=0; total=0; expire=${Math.floor(new Date(sub.expiresAt!).getTime() / 1000)}`,
+        "Profile-Update-Interval": "1",
+      },
+    });
+  }
+
+  // ==== Browser ====
+  if (isBrowser) return redirectToBrowserPage();
+
+  // ==== VPN Client — return keys ====
   const keys = await db
     .select()
     .from(subscriptionKeys)
@@ -212,28 +173,55 @@ export async function GET(
   const keyLines = enabledKeys.map((k) => {
     const displayName = k.customName || k.originalName || "";
     if (displayName) {
-      return setKeyNameEncoded(k.keyValue, displayName);
+      return setKeyNameForClient(k.keyValue, displayName);
     }
     return k.keyValue;
   });
 
-  // Build subscription content
+  // Plain text list, one key per line, then base64 encode entire content
   const content = keyLines.join("\n");
   const base64Content = Buffer.from(content, "utf-8").toString("base64");
 
-  // Profile title with proper UTF-8 encoding
+  // Profile title as base64-encoded UTF-8
   const profileTitle = sub.title || sub.name;
-  const profileTitleBase64 = Buffer.from(profileTitle, "utf-8").toString("base64");
 
   const headers: Record<string, string> = {
     "Content-Type": "text/plain; charset=utf-8",
     "Content-Disposition": `attachment; filename="${sub.slug}"`,
-    "Profile-Title": profileTitleBase64,
+    // Profile-Title: base64 encoded UTF-8 string
+    // This format is supported by Happ, Incy, Hiddify, NekoBox, V2RayNG, Streisand
+    "Profile-Title": encodeTitle(profileTitle),
   };
 
-  // Add expiry info if set
-  if (sub.expiresAt) {
-    headers["Subscription-Userinfo"] = `upload=0; download=0; total=0; expire=${Math.floor(new Date(sub.expiresAt).getTime() / 1000)}`;
+  // Subscription-Userinfo: traffic and expiry info for clients
+  // Only include fields that are enabled in settings
+  const infoParts: string[] = [];
+  
+  if (sub.showUpload) {
+    infoParts.push(`upload=${(sub.usedUploadGb || 0) * 1073741824}`);
+  } else {
+    infoParts.push("upload=0");
+  }
+
+  if (sub.showDownload) {
+    infoParts.push(`download=${(sub.usedDownloadGb || 0) * 1073741824}`);
+  } else {
+    infoParts.push("download=0");
+  }
+
+  if (sub.showTotal) {
+    infoParts.push(`total=${(sub.totalTrafficGb || 0) * 1073741824}`);
+  } else {
+    infoParts.push("total=0");
+  }
+
+  if (sub.showExpiry && sub.expiresAt) {
+    infoParts.push(`expire=${Math.floor(new Date(sub.expiresAt).getTime() / 1000)}`);
+  }
+
+  // Only add Subscription-Userinfo if there's something to show
+  if (sub.showUpload || sub.showDownload || sub.showTotal || (sub.showExpiry && sub.expiresAt)) {
+    headers["Subscription-Userinfo"] = infoParts.join("; ");
   }
 
   if (sub.clientUpdateHours) {

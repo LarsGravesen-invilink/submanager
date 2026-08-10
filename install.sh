@@ -200,7 +200,14 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     total_hits INTEGER NOT NULL DEFAULT 0,
     logo_url TEXT DEFAULT '',
     logo_size TEXT DEFAULT 'medium',
-    page_title TEXT DEFAULT ''
+    page_title TEXT DEFAULT '',
+    show_expiry BOOLEAN NOT NULL DEFAULT TRUE,
+    show_upload BOOLEAN NOT NULL DEFAULT FALSE,
+    show_download BOOLEAN NOT NULL DEFAULT FALSE,
+    show_total BOOLEAN NOT NULL DEFAULT FALSE,
+    total_traffic_gb INTEGER NOT NULL DEFAULT 0,
+    used_upload_gb INTEGER NOT NULL DEFAULT 0,
+    used_download_gb INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS subscription_keys (
@@ -249,6 +256,8 @@ echo -e "  ${GREEN}✓${NC} База данных настроена"
 # ===================== Systemd =====================
 echo -e "${CYAN}[6/7]${NC} Настройка автозапуска..."
 
+NODE_PATH=$(which node)
+
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" << EOF
 [Unit]
 Description=SubManager - VPN Subscription Manager
@@ -263,29 +272,84 @@ Environment=NODE_ENV=production
 Environment=PORT=${INTERNAL_PORT}
 Environment=HOSTNAME=0.0.0.0
 EnvironmentFile=${INSTALL_DIR}/.env
-ExecStart=$(which node) ${INSTALL_DIR}/server.js
+
+# Ждём доступности PostgreSQL перед запуском
+ExecStartPre=/bin/bash -c 'for i in \$(seq 1 30); do pg_isready -q && exit 0; sleep 1; done; exit 1'
+
+ExecStart=${NODE_PATH} ${INSTALL_DIR}/server.js
+
+# Автоперезапуск при любом падении
 Restart=always
-RestartSec=5
+RestartSec=3
+
+# Не ограничивать количество перезапусков
+StartLimitIntervalSec=0
+
+# Корректное завершение
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=10
+
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=${SERVICE_NAME}
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Cron для обновления подписок
-(crontab -l 2>/dev/null | grep -v "/api/cron/update"; echo "*/5 * * * * curl -s http://127.0.0.1:${INTERNAL_PORT}/api/cron/update > /dev/null 2>&1") | crontab -
+# Watchdog — проверка здоровья каждую минуту, перезапуск если упал
+cat > "/etc/systemd/system/${SERVICE_NAME}-watchdog.service" << EOF
+[Unit]
+Description=SubManager Watchdog
+After=${SERVICE_NAME}.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'curl -sf http://127.0.0.1:${INTERNAL_PORT}/api/health > /dev/null 2>&1 || systemctl restart ${SERVICE_NAME}'
+EOF
+
+cat > "/etc/systemd/system/${SERVICE_NAME}-watchdog.timer" << EOF
+[Unit]
+Description=SubManager Watchdog Timer
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Cron для обновления подписок из источников
+crontab -l 2>/dev/null | grep -v "/api/cron/update" | crontab - 2>/dev/null || true
+(crontab -l 2>/dev/null; echo "*/5 * * * * curl -sf http://127.0.0.1:${INTERNAL_PORT}/api/cron/update > /dev/null 2>&1") | crontab -
 
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" > /dev/null 2>&1
+systemctl enable "${SERVICE_NAME}-watchdog.timer" > /dev/null 2>&1
 systemctl restart "$SERVICE_NAME"
+systemctl start "${SERVICE_NAME}-watchdog.timer"
 
-sleep 3
-if systemctl is-active --quiet "$SERVICE_NAME"; then
-  echo -e "  ${GREEN}✓${NC} Сервис запущен"
+# Ждём запуска с проверкой
+echo -ne "  Запуск сервиса"
+STARTED=false
+for i in $(seq 1 10); do
+  sleep 1
+  echo -ne "."
+  if curl -sf http://127.0.0.1:${INTERNAL_PORT}/api/health > /dev/null 2>&1; then
+    STARTED=true
+    break
+  fi
+done
+echo ""
+
+if [ "$STARTED" = true ]; then
+  echo -e "  ${GREEN}✓${NC} Сервис запущен и отвечает"
+  echo -e "  ${GREEN}✓${NC} Watchdog активен (проверка каждые 60 сек)"
 else
-  echo -e "  ${RED}✗${NC} Сервис не запустился. Логи:"
-  journalctl -u "$SERVICE_NAME" -n 20 --no-pager
+  echo -e "  ${RED}✗${NC} Сервис не отвечает. Логи:"
+  journalctl -u "$SERVICE_NAME" -n 30 --no-pager
   echo ""
   echo -e "  ${YELLOW}Попробуйте запустить вручную:${NC}"
   echo -e "  cd ${INSTALL_DIR} && node server.js"

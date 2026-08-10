@@ -51,6 +51,16 @@ export default function CreateSubscriptionPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [pageTitle, setPageTitle] = useState("");
+  
+  // Client display settings
+  const [showExpiry, setShowExpiry] = useState(true);
+  const [showUpload, setShowUpload] = useState(false);
+  const [showDownload, setShowDownload] = useState(false);
+  const [showTotal, setShowTotal] = useState(false);
+  const [totalTrafficGb, setTotalTrafficGb] = useState(0);
+  const [usedUploadGb, setUsedUploadGb] = useState(0);
+  const [usedDownloadGb, setUsedDownloadGb] = useState(0);
+  
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -296,6 +306,13 @@ export default function CreateSubscriptionPage() {
           logoUrl,
           logoSize,
           pageTitle,
+          showExpiry,
+          showUpload,
+          showDownload,
+          showTotal,
+          totalTrafficGb,
+          usedUploadGb,
+          usedDownloadGb,
         }),
       });
 
@@ -607,6 +624,104 @@ export default function CreateSubscriptionPage() {
           </div>
         </section>
 
+        {/* Client display settings */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 animate-fade-in">
+          <h2 className="text-lg font-semibold text-graphite-100 mb-2">
+            Отображение в клиенте
+          </h2>
+          <p className="text-graphite-500 text-sm mb-4">
+            Настройте информацию, отображаемую в VPN клиентах
+          </p>
+
+          <div className="space-y-3">
+            {/* Show Expiry */}
+            <label className="flex items-center justify-between py-2 cursor-pointer">
+              <span className="text-sm text-graphite-300">Показывать срок действия</span>
+              <button
+                type="button"
+                onClick={() => setShowExpiry(!showExpiry)}
+                className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${
+                  showExpiry ? "bg-accent-500" : "bg-graphite-700"
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${showExpiry ? "translate-x-4" : ""}`} />
+              </button>
+            </label>
+
+            {/* Show Upload */}
+            <label className="flex items-center justify-between py-2 cursor-pointer">
+              <span className="text-sm text-graphite-300">Показывать загрузку (upload)</span>
+              <button
+                type="button"
+                onClick={() => setShowUpload(!showUpload)}
+                className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${
+                  showUpload ? "bg-accent-500" : "bg-graphite-700"
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${showUpload ? "translate-x-4" : ""}`} />
+              </button>
+            </label>
+
+            {showUpload && (
+              <div className="ml-4">
+                <label className="block text-xs text-graphite-500 mb-1">Использовано (ГБ)</label>
+                <input type="number" min={0} value={usedUploadGb}
+                  onChange={(e) => setUsedUploadGb(Number(e.target.value))}
+                  className="w-32 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-2 text-sm text-graphite-100 focus:outline-none focus:ring-1 focus:ring-accent-500/50"
+                />
+              </div>
+            )}
+
+            {/* Show Download */}
+            <label className="flex items-center justify-between py-2 cursor-pointer">
+              <span className="text-sm text-graphite-300">Показывать скачивание (download)</span>
+              <button
+                type="button"
+                onClick={() => setShowDownload(!showDownload)}
+                className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${
+                  showDownload ? "bg-accent-500" : "bg-graphite-700"
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${showDownload ? "translate-x-4" : ""}`} />
+              </button>
+            </label>
+
+            {showDownload && (
+              <div className="ml-4">
+                <label className="block text-xs text-graphite-500 mb-1">Использовано (ГБ)</label>
+                <input type="number" min={0} value={usedDownloadGb}
+                  onChange={(e) => setUsedDownloadGb(Number(e.target.value))}
+                  className="w-32 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-2 text-sm text-graphite-100 focus:outline-none focus:ring-1 focus:ring-accent-500/50"
+                />
+              </div>
+            )}
+
+            {/* Show Total */}
+            <label className="flex items-center justify-between py-2 cursor-pointer">
+              <span className="text-sm text-graphite-300">Показывать общий лимит трафика</span>
+              <button
+                type="button"
+                onClick={() => setShowTotal(!showTotal)}
+                className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${
+                  showTotal ? "bg-accent-500" : "bg-graphite-700"
+                }`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${showTotal ? "translate-x-4" : ""}`} />
+              </button>
+            </label>
+
+            {showTotal && (
+              <div className="ml-4">
+                <label className="block text-xs text-graphite-500 mb-1">Общий лимит (ГБ)</label>
+                <input type="number" min={0} value={totalTrafficGb}
+                  onChange={(e) => setTotalTrafficGb(Number(e.target.value))}
+                  className="w-32 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-2 text-sm text-graphite-100 focus:outline-none focus:ring-1 focus:ring-accent-500/50"
+                />
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Page customization with logo upload */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 animate-fade-in">
           <h2 className="text-lg font-semibold text-graphite-100 mb-4">
@@ -625,7 +740,7 @@ export default function CreateSubscriptionPage() {
                   <img
                     src={logoPreview}
                     alt="Logo preview"
-                    className={`object-contain bg-graphite-800 rounded-xl border border-graphite-700 ${
+                    className={`object-contain rounded-xl ${
                       logoSize === "small" ? "h-12" : logoSize === "medium" ? "h-20" : "h-32"
                     }`}
                   />

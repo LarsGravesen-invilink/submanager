@@ -61,6 +61,13 @@ export async function POST(req: Request) {
       logoUrl: logoUrl || "",
       logoSize: logoSize || "medium",
       pageTitle: pageTitle || "",
+      showExpiry: body.showExpiry !== false,
+      showUpload: body.showUpload === true,
+      showDownload: body.showDownload === true,
+      showTotal: body.showTotal === true,
+      totalTrafficGb: body.totalTrafficGb || 0,
+      usedUploadGb: body.usedUploadGb || 0,
+      usedDownloadGb: body.usedDownloadGb || 0,
     })
     .returning();
 

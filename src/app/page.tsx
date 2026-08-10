@@ -157,7 +157,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-center text-graphite-600 text-xs mt-6">
-            SubManager v1.0 — Защищённое управление подписками
+            SubManager by <span className="text-graphite-400">LarsGravesen</span>
           </p>
         </div>
       </div>
