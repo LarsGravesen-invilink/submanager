@@ -136,7 +136,26 @@ rm -rf "$INSTALL_DIR" 2>/dev/null || true
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-curl -sL "$DIST_URL" | tar -xzf -
+# Скачиваем файл отдельно (GitHub требует follow redirects)
+echo -e "  Загрузка архива (~18 MB)..."
+curl -fSL --retry 3 --retry-delay 2 -o /tmp/submanager-dist.tar.gz "$DIST_URL" || {
+  echo -e "  ${RED}✗ Ошибка загрузки. Проверьте URL:${NC}"
+  echo -e "  $DIST_URL"
+  exit 1
+}
+
+# Проверяем что это gzip
+if ! gzip -t /tmp/submanager-dist.tar.gz 2>/dev/null; then
+  echo -e "  ${RED}✗ Скачанный файл повреждён или не является архивом${NC}"
+  echo -e "  Содержимое файла:"
+  head -c 200 /tmp/submanager-dist.tar.gz
+  rm -f /tmp/submanager-dist.tar.gz
+  exit 1
+fi
+
+# Распаковываем
+tar -xzf /tmp/submanager-dist.tar.gz -C "$INSTALL_DIR"
+rm -f /tmp/submanager-dist.tar.gz
 echo -e "  ${GREEN}✓${NC} Сборка распакована"
 
 # ===================== Конфигурация и схема БД =====================
