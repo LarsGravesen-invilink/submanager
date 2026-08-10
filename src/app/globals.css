@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --color-graphite-50: #f5f5f6;
+  --color-graphite-100: #e5e5e7;
+  --color-graphite-200: #cdcdd1;
+  --color-graphite-300: #ababaf;
+  --color-graphite-400: #808086;
+  --color-graphite-500: #65656c;
+  --color-graphite-600: #56565b;
+  --color-graphite-700: #3d3d42;
+  --color-graphite-800: #2a2a2e;
+  --color-graphite-900: #1e1e22;
+  --color-graphite-950: #141417;
+
+  --color-accent-50: #fff7ed;
+  --color-accent-100: #ffedd5;
+  --color-accent-200: #fed7aa;
+  --color-accent-300: #fdba74;
+  --color-accent-400: #fb923c;
+  --color-accent-500: #c2610a;
+  --color-accent-600: #a3520a;
+  --color-accent-700: #8b4513;
+  --color-accent-800: #6d3610;
+  --color-accent-900: #5a2d0e;
+  --color-accent-DEFAULT: #c2610a;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3d3d42 transparent;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(194, 97, 10, 0.3); }
+  50% { box-shadow: 0 0 20px 4px rgba(194, 97, 10, 0.15); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s ease-out;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}

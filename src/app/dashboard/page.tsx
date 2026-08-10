@@ -1,0 +1,284 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+
+interface Subscription {
+  id: string;
+  name: string;
+  title: string;
+  slug: string;
+  isActive: boolean;
+  createdAt: string;
+  expiresAt: string | null;
+  uniqueHits: number;
+  totalHits: number;
+}
+
+export default function DashboardPage() {
+  const [subs, setSubs] = useState<Subscription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState<string | null>(null);
+  const router = useRouter();
+
+  const loadSubs = useCallback(async () => {
+    try {
+      const res = await fetch("/api/subscriptions");
+      if (res.status === 401) {
+        router.push("/");
+        return;
+      }
+      const data = await res.json();
+      setSubs(data);
+    } catch {
+      // ignore
+    }
+    setLoading(false);
+  }, [router]);
+
+  useEffect(() => {
+    loadSubs();
+  }, [loadSubs]);
+
+  const getSubUrl = (slug: string) => {
+    return `${window.location.origin}/api/sub/${slug}`;
+  };
+
+  const copyLink = async (slug: string) => {
+    await navigator.clipboard.writeText(getSubUrl(slug));
+    setCopied(slug);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const toggleActive = async (id: string, current: boolean) => {
+    await fetch(`/api/subscriptions/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !current }),
+    });
+    loadSubs();
+  };
+
+  const deleteSub = async (id: string, name: string) => {
+    if (!confirm(`Удалить подписку "${name}"?`)) return;
+    await fetch(`/api/subscriptions/${id}`, { method: "DELETE" });
+    loadSubs();
+  };
+
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/");
+  };
+
+  const isExpired = (expiresAt: string | null) => {
+    if (!expiresAt) return false;
+    return new Date(expiresAt) < new Date();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-graphite-950">
+      {/* Header */}
+      <header className="sticky top-0 z-50 bg-graphite-950/80 backdrop-blur-xl border-b border-graphite-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h1 className="text-lg font-semibold text-graphite-100">SubManager</h1>
+          </div>
+          <button
+            onClick={logout}
+            className="text-graphite-400 hover:text-graphite-200 text-sm transition-colors flex items-center gap-1.5"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Выход
+          </button>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Top bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h2 className="text-2xl font-bold text-graphite-50">Подписки</h2>
+            <p className="text-graphite-400 text-sm mt-1">
+              {subs.length === 0
+                ? "Нет созданных подписок"
+                : `Всего: ${subs.length}`}
+            </p>
+          </div>
+          <button
+            onClick={() => router.push("/dashboard/create")}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white font-medium px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-accent-500/20 hover:shadow-accent-500/30"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Создать подписку
+          </button>
+        </div>
+
+        {/* Subscriptions list */}
+        {subs.length === 0 ? (
+          <div className="text-center py-20 animate-fade-in">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-graphite-900 border border-graphite-800 flex items-center justify-center">
+              <svg className="w-8 h-8 text-graphite-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            </div>
+            <h3 className="text-graphite-300 text-lg font-medium">
+              Нет подписок
+            </h3>
+            <p className="text-graphite-500 text-sm mt-1">
+              Создайте первую подписку для начала работы
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {subs.map((sub, i) => (
+              <div
+                key={sub.id}
+                className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5 hover:border-graphite-700 transition-all animate-fade-in group"
+                style={{ animationDelay: `${i * 50}ms` }}
+              >
+                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-lg font-semibold text-graphite-100 truncate">
+                        {sub.name}
+                      </h3>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          !sub.isActive
+                            ? "bg-graphite-700 text-graphite-400"
+                            : isExpired(sub.expiresAt)
+                            ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                            : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        }`}
+                      >
+                        {!sub.isActive
+                          ? "Приостановлена"
+                          : isExpired(sub.expiresAt)
+                          ? "Истекла"
+                          : "Активна"}
+                      </span>
+                    </div>
+                    {sub.title && (
+                      <p className="text-graphite-400 text-sm mb-2 truncate">
+                        {sub.title}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 text-xs text-graphite-500">
+                      <span className="flex items-center gap-1">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        {sub.uniqueHits} уник. / {sub.totalHits} всего
+                      </span>
+                      {sub.expiresAt && (
+                        <span>
+                          До:{" "}
+                          {new Date(sub.expiresAt).toLocaleDateString("ru-RU")}
+                        </span>
+                      )}
+                      <span>
+                        Создана:{" "}
+                        {new Date(sub.createdAt).toLocaleDateString("ru-RU")}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => copyLink(sub.slug)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                        copied === sub.slug
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                          : "bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30"
+                      }`}
+                      title="Копировать ссылку"
+                    >
+                      {copied === sub.slug ? (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span className="hidden sm:inline">Скопировано</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                          <span className="hidden sm:inline">Ссылка</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => router.push(`/dashboard/edit/${sub.id}`)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30 transition-all"
+                      title="Редактировать"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      <span className="hidden sm:inline">Изменить</span>
+                    </button>
+
+                    <button
+                      onClick={() => toggleActive(sub.id, sub.isActive)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+                        sub.isActive
+                          ? "bg-graphite-800 text-yellow-400 border-graphite-700 hover:border-yellow-500/30"
+                          : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                      }`}
+                      title={sub.isActive ? "Приостановить" : "Возобновить"}
+                    >
+                      {sub.isActive ? (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => deleteSub(sub.id, sub.name)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-red-400 border border-graphite-700 hover:border-red-500/30 hover:bg-red-500/10 transition-all"
+                      title="Удалить"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
