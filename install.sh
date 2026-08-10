@@ -168,21 +168,80 @@ NODE_ENV=production
 PORT=${INTERNAL_PORT}
 EOF
 
-# Скачиваем файлы для drizzle-kit
-curl -sL "$DBPKG_URL" -o "$INSTALL_DIR/db-package.json"
-curl -sL "$DRIZZLE_CFG_URL" -o "$INSTALL_DIR/drizzle.config.json"
-mkdir -p "$INSTALL_DIR/src/db"
-curl -sL "$SCHEMA_URL" -o "$INSTALL_DIR/src/db/schema.ts"
+# Создаём таблицы напрямую через SQL
+PGPASSWORD="${DB_PASS}" psql -h 127.0.0.1 -U "${DB_USER}" -d "${DB_NAME}" -q << 'EOSQL'
+CREATE TABLE IF NOT EXISTS admins (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
 
-# Устанавливаем только drizzle-kit для миграций
-cd "$INSTALL_DIR"
-npm install --prefix "$INSTALL_DIR" --package-json="$INSTALL_DIR/db-package.json" --silent 2>/dev/null || \
-  npm install drizzle-kit drizzle-orm pg --save-dev --silent 2>/dev/null || true
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ip TEXT NOT NULL,
+    attempted_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    success BOOLEAN NOT NULL DEFAULT FALSE
+);
 
-# Применяем схему
-npx drizzle-kit push --force 2>/dev/null || npx drizzle-kit push 2>/dev/null || {
-  echo -e "  ${YELLOW}⚠${NC} Схема будет создана при первом запуске"
-}
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    slug TEXT NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    expires_at TIMESTAMP,
+    auto_update_minutes INTEGER NOT NULL DEFAULT 60,
+    client_update_hours INTEGER NOT NULL DEFAULT 24,
+    unique_hits INTEGER NOT NULL DEFAULT 0,
+    total_hits INTEGER NOT NULL DEFAULT 0,
+    logo_url TEXT DEFAULT '',
+    page_title TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS subscription_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    key_value TEXT NOT NULL,
+    custom_name TEXT DEFAULT '',
+    original_name TEXT DEFAULT '',
+    source_type TEXT NOT NULL DEFAULT 'manual',
+    source_url TEXT DEFAULT '',
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    key_fingerprint TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS remote_sources (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    last_fetched_at TIMESTAMP,
+    last_status TEXT DEFAULT 'pending',
+    selected_keys JSONB DEFAULT '[]',
+    key_names JSONB DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS access_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    ip TEXT NOT NULL,
+    user_agent TEXT DEFAULT '',
+    device_name TEXT DEFAULT '',
+    device_type TEXT DEFAULT '',
+    accessed_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
+EOSQL
+
 echo -e "  ${GREEN}✓${NC} База данных настроена"
 
 # ===================== Systemd =====================
@@ -219,12 +278,16 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" > /dev/null 2>&1
 systemctl restart "$SERVICE_NAME"
 
-sleep 2
+sleep 3
 if systemctl is-active --quiet "$SERVICE_NAME"; then
   echo -e "  ${GREEN}✓${NC} Сервис запущен"
 else
-  echo -e "  ${YELLOW}⚠${NC} Проверка сервиса..."
-  systemctl status "$SERVICE_NAME" --no-pager -l || true
+  echo -e "  ${RED}✗${NC} Сервис не запустился. Логи:"
+  journalctl -u "$SERVICE_NAME" -n 20 --no-pager
+  echo ""
+  echo -e "  ${YELLOW}Попробуйте запустить вручную:${NC}"
+  echo -e "  cd ${INSTALL_DIR} && node server.js"
+  echo ""
 fi
 
 # ===================== Nginx + SSL =====================
