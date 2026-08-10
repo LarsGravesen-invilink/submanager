@@ -14,7 +14,7 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-DIST_URL="https://github.com/LarsGravesen-invilink/submanager/releases/download/v1.0.0/submanager-dist.tar.gz"
+DIST_URL="https://github.com/LarsGravesen-invilink/submanager/releases/download/1.0.0/submanager-dist.tar.gz"
 DBPKG_URL="https://raw.githubusercontent.com/LarsGravesen-invilink/submanager/main/dist-package.json"
 DRIZZLE_CFG_URL="https://raw.githubusercontent.com/LarsGravesen-invilink/submanager/main/drizzle.config.json"
 SCHEMA_URL="https://raw.githubusercontent.com/LarsGravesen-invilink/submanager/main/src/db/schema.ts"
