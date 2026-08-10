@@ -75,7 +75,6 @@ done
 
 # ===================== Нестандартный порт =====================
 NGINX_PORT=443
-NGINX_HTTP_PORT=80
 USE_CUSTOM_PORT=false
 
 echo ""
@@ -101,14 +100,36 @@ fi
 echo -e "${BLUE}Начинаем установку...${NC}"
 echo ""
 
+# ===================== SWAP (для VPS с малым RAM) =====================
+echo -e "${CYAN}[1/9]${NC} Проверка памяти и swap..."
+TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}')
+SWAP_SIZE=$(free -m | awk '/^Swap:/{print $2}')
+
+if [ "$TOTAL_RAM" -lt 2000 ] && [ "$SWAP_SIZE" -lt 1000 ]; then
+  echo -e "  RAM: ${TOTAL_RAM}MB — добавляем swap для сборки..."
+  if [ ! -f /swapfile ]; then
+    fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+    chmod 600 /swapfile
+    mkswap /swapfile > /dev/null 2>&1
+    swapon /swapfile 2>/dev/null || true
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab 2>/dev/null || true
+    echo -e "  ${GREEN}✓${NC} Swap 2GB создан"
+  else
+    swapon /swapfile 2>/dev/null || true
+    echo -e "  ${GREEN}✓${NC} Swap уже существует"
+  fi
+else
+  echo -e "  ${GREEN}✓${NC} Достаточно памяти (RAM: ${TOTAL_RAM}MB)"
+fi
+
 # ===================== Зависимости =====================
-echo -e "${CYAN}[1/8]${NC} Обновление системы и установка зависимостей..."
+echo -e "${CYAN}[2/9]${NC} Обновление системы и установка зависимостей..."
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl git build-essential dnsutils nginx certbot python3-certbot-nginx > /dev/null 2>&1
 echo -e "  ${GREEN}✓${NC} Системные пакеты установлены"
 
 # ===================== Node.js =====================
-echo -e "${CYAN}[2/8]${NC} Установка Node.js 20..."
+echo -e "${CYAN}[3/9]${NC} Установка Node.js 20..."
 if ! command -v node &> /dev/null || [[ $(node -v | cut -d. -f1 | tr -d 'v') -lt 20 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null 2>&1
   apt-get install -y -qq nodejs > /dev/null 2>&1
@@ -116,7 +137,7 @@ fi
 echo -e "  ${GREEN}✓${NC} Node.js $(node -v), npm $(npm -v)"
 
 # ===================== PostgreSQL =====================
-echo -e "${CYAN}[3/8]${NC} Установка и настройка PostgreSQL..."
+echo -e "${CYAN}[4/9]${NC} Установка и настройка PostgreSQL..."
 if ! command -v psql &> /dev/null; then
   apt-get install -y -qq postgresql postgresql-contrib > /dev/null 2>&1
 fi
@@ -134,14 +155,14 @@ sudo -u postgres psql -d "${DB_NAME}" -c "GRANT ALL ON SCHEMA public TO ${DB_USE
 echo -e "  ${GREEN}✓${NC} PostgreSQL настроен"
 
 # ===================== Клонирование =====================
-echo -e "${CYAN}[4/8]${NC} Клонирование репозитория..."
+echo -e "${CYAN}[5/9]${NC} Клонирование репозитория..."
 rm -rf "$INSTALL_DIR" 2>/dev/null || true
 git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null
 cd "$INSTALL_DIR"
 echo -e "  ${GREEN}✓${NC} Репозиторий клонирован"
 
 # ===================== Конфигурация =====================
-echo -e "${CYAN}[5/8]${NC} Настройка конфигурации..."
+echo -e "${CYAN}[6/9]${NC} Настройка конфигурации..."
 cat > "$INSTALL_DIR/.env" << EOF
 DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}
 JWT_SECRET=${JWT_SECRET}
@@ -151,22 +172,25 @@ EOF
 echo -e "  ${GREEN}✓${NC} .env создан"
 
 # ===================== Сборка =====================
-echo -e "${CYAN}[6/8]${NC} Установка зависимостей и сборка (2-5 минут)..."
+echo -e "${CYAN}[7/9]${NC} Установка зависимостей и сборка (3-7 минут)..."
+
+# Ограничиваем память Node.js для избежания OOM
+export NODE_OPTIONS="--max-old-space-size=512"
 
 echo -e "  Установка npm пакетов..."
-npm ci --silent 2>/dev/null || npm install --silent
+npm ci 2>/dev/null || npm install
 echo -e "  ${GREEN}✓${NC} Пакеты установлены"
 
 echo -e "  Применение схемы базы данных..."
 npx drizzle-kit push --force 2>/dev/null || npx drizzle-kit push
 echo -e "  ${GREEN}✓${NC} Схема БД применена"
 
-echo -e "  Сборка приложения..."
+echo -e "  Сборка приложения (это может занять несколько минут)..."
 npm run build
 echo -e "  ${GREEN}✓${NC} Приложение собрано"
 
 # ===================== Systemd =====================
-echo -e "${CYAN}[7/8]${NC} Настройка автозапуска..."
+echo -e "${CYAN}[8/9]${NC} Настройка автозапуска..."
 
 # Копируем static файлы для standalone режима
 mkdir -p "$INSTALL_DIR/.next/standalone/.next"
@@ -205,16 +229,16 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" > /dev/null 2>&1
 systemctl restart "$SERVICE_NAME"
 
-sleep 2
+sleep 3
 if systemctl is-active --quiet "$SERVICE_NAME"; then
   echo -e "  ${GREEN}✓${NC} Сервис ${SERVICE_NAME} запущен"
 else
   echo -e "  ${YELLOW}⚠${NC} Проверяем статус сервиса..."
-  systemctl status "$SERVICE_NAME" --no-pager || true
+  systemctl status "$SERVICE_NAME" --no-pager -l || true
 fi
 
 # ===================== Nginx + SSL =====================
-echo -e "${CYAN}[8/8]${NC} Настройка Nginx и SSL..."
+echo -e "${CYAN}[9/9]${NC} Настройка Nginx и SSL..."
 
 # Остановим nginx для certbot standalone
 systemctl stop nginx 2>/dev/null || true
@@ -233,7 +257,6 @@ certbot certonly --standalone -d "$DOMAIN" --non-interactive --agree-tos --regis
 if [ "$SSL_OBTAINED" = true ]; then
 
   if [ "$USE_CUSTOM_PORT" = true ]; then
-    # --- Нестандартный порт: SSL слушает на кастомном порту ---
     cat > "/etc/nginx/sites-available/${DOMAIN}" << EOF
 server {
     listen ${NGINX_PORT} ssl http2;
@@ -261,7 +284,6 @@ server {
 }
 EOF
   else
-    # --- Стандартный порт: 80 → redirect, 443 → SSL ---
     cat > "/etc/nginx/sites-available/${DOMAIN}" << EOF
 server {
     listen 80;
@@ -297,7 +319,6 @@ EOF
   fi
 
 else
-  # --- Без SSL ---
   if [ "$USE_CUSTOM_PORT" = true ]; then
     cat > "/etc/nginx/sites-available/${DOMAIN}" << EOF
 server {
