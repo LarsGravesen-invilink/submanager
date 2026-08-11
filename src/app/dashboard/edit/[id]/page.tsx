@@ -45,6 +45,13 @@ interface SubData {
   totalHits: number;
   logoUrl: string;
   pageTitle: string;
+  showExpiry?: boolean;
+  showUpload?: boolean;
+  showDownload?: boolean;
+  showTotal?: boolean;
+  totalTrafficGb?: number;
+  usedUploadGb?: number;
+  usedDownloadGb?: number;
   keys: SubKey[];
   sources: SubSource[];
   logs: LogEntry[];
@@ -64,6 +71,13 @@ export default function EditSubscriptionPage({
   const [expiresAt, setExpiresAt] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
   const [pageTitle, setPageTitle] = useState("");
+  const [showExpiry, setShowExpiry] = useState(true);
+  const [showUpload, setShowUpload] = useState(false);
+  const [showDownload, setShowDownload] = useState(false);
+  const [showTotal, setShowTotal] = useState(false);
+  const [totalTrafficGb, setTotalTrafficGb] = useState(0);
+  const [usedUploadGb, setUsedUploadGb] = useState(0);
+  const [usedDownloadGb, setUsedDownloadGb] = useState(0);
   const [keys, setKeys] = useState<SubKey[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -94,6 +108,13 @@ export default function EditSubscriptionPage({
     );
     setLogoUrl(data.logoUrl || "");
     setPageTitle(data.pageTitle || "");
+    setShowExpiry(data.showExpiry !== false);
+    setShowUpload(data.showUpload === true);
+    setShowDownload(data.showDownload === true);
+    setShowTotal(data.showTotal === true);
+    setTotalTrafficGb(data.totalTrafficGb || 0);
+    setUsedUploadGb(data.usedUploadGb || 0);
+    setUsedDownloadGb(data.usedDownloadGb || 0);
     setKeys(data.keys);
   }, [id, router]);
 
@@ -121,6 +142,13 @@ export default function EditSubscriptionPage({
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
           logoUrl,
           pageTitle,
+          showExpiry,
+          showUpload,
+          showDownload,
+          showTotal,
+          totalTrafficGb,
+          usedUploadGb,
+          usedDownloadGb,
           keys: keys.map((k) => ({
             value: k.keyValue,
             customName: k.customName,
@@ -369,6 +397,64 @@ export default function EditSubscriptionPage({
                 className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all text-sm"
               />
             </div>
+          </div>
+        </section>
+
+        {/* Client display settings */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 animate-fade-in">
+          <h2 className="text-lg font-semibold text-graphite-100 mb-2">
+            Отображение в клиенте
+          </h2>
+          <p className="text-graphite-500 text-sm mb-4">
+            Управление дополнительной информацией в заголовке подписки клиента.
+          </p>
+
+          <div className="space-y-3">
+            <label className="flex items-center justify-between py-2 cursor-pointer">
+              <span className="text-sm text-graphite-300">Показывать срок действия</span>
+              <button type="button" onClick={() => setShowExpiry(!showExpiry)} className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${showExpiry ? "bg-accent-500" : "bg-graphite-700"}`}>
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${showExpiry ? "translate-x-4" : ""}`} />
+              </button>
+            </label>
+
+            <label className="flex items-center justify-between py-2 cursor-pointer">
+              <span className="text-sm text-graphite-300">Показывать upload</span>
+              <button type="button" onClick={() => setShowUpload(!showUpload)} className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${showUpload ? "bg-accent-500" : "bg-graphite-700"}`}>
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${showUpload ? "translate-x-4" : ""}`} />
+              </button>
+            </label>
+            {showUpload && (
+              <div className="ml-4">
+                <label className="block text-xs text-graphite-500 mb-1">Использовано upload (ГБ)</label>
+                <input type="number" min={0} value={usedUploadGb} onChange={(e) => setUsedUploadGb(Number(e.target.value))} className="w-32 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-2 text-sm text-graphite-100 focus:outline-none focus:ring-1 focus:ring-accent-500/50" />
+              </div>
+            )}
+
+            <label className="flex items-center justify-between py-2 cursor-pointer">
+              <span className="text-sm text-graphite-300">Показывать download</span>
+              <button type="button" onClick={() => setShowDownload(!showDownload)} className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${showDownload ? "bg-accent-500" : "bg-graphite-700"}`}>
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${showDownload ? "translate-x-4" : ""}`} />
+              </button>
+            </label>
+            {showDownload && (
+              <div className="ml-4">
+                <label className="block text-xs text-graphite-500 mb-1">Использовано download (ГБ)</label>
+                <input type="number" min={0} value={usedDownloadGb} onChange={(e) => setUsedDownloadGb(Number(e.target.value))} className="w-32 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-2 text-sm text-graphite-100 focus:outline-none focus:ring-1 focus:ring-accent-500/50" />
+              </div>
+            )}
+
+            <label className="flex items-center justify-between py-2 cursor-pointer">
+              <span className="text-sm text-graphite-300">Показывать общий лимит трафика</span>
+              <button type="button" onClick={() => setShowTotal(!showTotal)} className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${showTotal ? "bg-accent-500" : "bg-graphite-700"}`}>
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${showTotal ? "translate-x-4" : ""}`} />
+              </button>
+            </label>
+            {showTotal && (
+              <div className="ml-4">
+                <label className="block text-xs text-graphite-500 mb-1">Общий лимит (ГБ)</label>
+                <input type="number" min={0} value={totalTrafficGb} onChange={(e) => setTotalTrafficGb(Number(e.target.value))} className="w-32 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-2 text-sm text-graphite-100 focus:outline-none focus:ring-1 focus:ring-accent-500/50" />
+              </div>
+            )}
           </div>
         </section>
 

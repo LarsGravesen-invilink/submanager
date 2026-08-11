@@ -126,9 +126,10 @@ export async function GET(
     return NextResponse.redirect(`${baseUrl}/s/${slug}`);
   };
 
-  // Build common profile title as base64 UTF-8
+  // Build profile title in the format supported by Hiddify/Happ/Incy/NekoBox/etc:
+  // Profile-Title: base64:<utf8-base64>
   const encodeTitle = (text: string) =>
-    Buffer.from(text, "utf-8").toString("base64");
+    `base64:${Buffer.from(text, "utf-8").toString("base64")}`;
 
   // ==== Paused ====
   if (!sub.isActive) {
@@ -138,6 +139,7 @@ export async function GET(
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Profile-Title": encodeTitle("Подписка приостановлена"),
+        "Profile-Title-Encode": "base64",
         "Profile-Update-Interval": "1",
       },
     });
@@ -153,6 +155,7 @@ export async function GET(
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Profile-Title": encodeTitle("Подписка истекла"),
+        "Profile-Title-Encode": "base64",
         "Subscription-Userinfo": `upload=0; download=0; total=0; expire=${Math.floor(new Date(sub.expiresAt!).getTime() / 1000)}`,
         "Profile-Update-Interval": "1",
       },
@@ -187,10 +190,10 @@ export async function GET(
 
   const headers: Record<string, string> = {
     "Content-Type": "text/plain; charset=utf-8",
-    "Content-Disposition": `attachment; filename="${sub.slug}"`,
-    // Profile-Title: base64 encoded UTF-8 string
-    // This format is supported by Happ, Incy, Hiddify, NekoBox, V2RayNG, Streisand
+    "Content-Disposition": `attachment; filename="${sub.slug}"; filename*=UTF-8''${encodeURIComponent(sub.slug)}`,
+    // Supported by Happ/Incy/Hiddify/NekoBox/etc.
     "Profile-Title": encodeTitle(profileTitle),
+    "Profile-Title-Encode": "base64",
   };
 
   // Subscription-Userinfo: traffic and expiry info for clients
