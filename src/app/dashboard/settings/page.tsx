@@ -92,10 +92,9 @@ export default function SettingsPage() {
   useEffect(() => {
     document.documentElement.style.setProperty("--color-accent-500", accentColor);
     document.documentElement.style.setProperty("--color-accent-DEFAULT", accentColor);
-    // Derive lighter/darker shades
-    document.documentElement.style.setProperty("--color-accent-600", darken(accentColor, 15));
-    document.documentElement.style.setProperty("--color-accent-700", darken(accentColor, 30));
-    document.documentElement.style.setProperty("--color-accent-400", lighten(accentColor, 20));
+    document.documentElement.style.setProperty("--color-accent-600", accentColor);
+    document.documentElement.style.setProperty("--color-accent-700", accentColor);
+    document.documentElement.style.setProperty("--color-accent-400", accentColor);
   }, [accentColor]);
 
   // Live preview: font size

@@ -10,25 +10,48 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [adminExists, setAdminExists] = useState<boolean | null>(null);
   const [checking, setChecking] = useState(true);
+  const [cfg, setCfg] = useState<Record<string, string>>({});
   const router = useRouter();
 
-  // Settings from DB
-  const [cfg, setCfg] = useState<Record<string, string>>({});
+  useEffect(() => {
+    // Auth check — critical
+    fetch("/api/auth/check")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.authenticated) {
+          router.push("/dashboard");
+          return;
+        }
+        setAdminExists(data.adminExists);
+        setChecking(false);
+      })
+      .catch(() => setChecking(false));
+
+    // Settings — non-blocking, best effort
+    fetch("/api/settings/public")
+      .then((r) => r.ok ? r.json() : {})
+      .then((data) => setCfg(data || {}))
+      .catch(() => {});
+  }, [router]);
+
+  // Apply theme from settings
+  useEffect(() => {
+    if (!cfg.accentColor) return;
+    document.documentElement.style.setProperty("--color-accent-500", cfg.accentColor);
+    document.documentElement.style.setProperty("--color-accent-DEFAULT", cfg.accentColor);
+  }, [cfg.accentColor]);
 
   useEffect(() => {
-    // Load auth state and settings in parallel
-    Promise.all([
-      fetch("/api/auth/check").then((r) => r.json()),
-      fetch("/api/settings/public").then((r) => r.json()).catch(() => ({})),
-    ]).then(([auth, settings]) => {
-      if (auth.authenticated) {
-        router.push("/dashboard");
-      }
-      setAdminExists(auth.adminExists);
-      setCfg(settings || {});
-      setChecking(false);
-    }).catch(() => setChecking(false));
-  }, [router]);
+    if (!cfg.fontSize) return;
+    document.documentElement.style.fontSize = `${cfg.fontSize}px`;
+    return () => { document.documentElement.style.fontSize = ""; };
+  }, [cfg.fontSize]);
+
+  useEffect(() => {
+    if (!cfg.fontFamily) return;
+    document.body.style.fontFamily = cfg.fontFamily;
+    return () => { document.body.style.fontFamily = ""; };
+  }, [cfg.fontFamily]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,24 +89,6 @@ export default function LoginPage() {
     );
   }
 
-  // Apply accent color
-  useEffect(() => {
-    if (cfg.accentColor) {
-      document.documentElement.style.setProperty("--color-accent-500", cfg.accentColor);
-      document.documentElement.style.setProperty("--color-accent-DEFAULT", cfg.accentColor);
-    }
-    if (cfg.fontSize) {
-      document.documentElement.style.fontSize = `${cfg.fontSize}px`;
-    }
-    if (cfg.fontFamily) {
-      document.body.style.fontFamily = cfg.fontFamily;
-    }
-    return () => {
-      document.documentElement.style.fontSize = "";
-      document.body.style.fontFamily = "";
-    };
-  }, [cfg]);
-
   const serviceName = cfg.serviceName || "SubManager";
   const loginTitle = cfg.loginTitle || (adminExists ? "Вход в панель" : "Создание администратора");
   const loginSubtitle = cfg.loginSubtitle || (adminExists ? "Введите учетные данные для входа" : "Первый ввод создаст учётную запись администратора");
@@ -107,19 +112,13 @@ export default function LoginPage() {
               </div>
             )}
             <h1 className="text-3xl font-bold text-graphite-50">{serviceName}</h1>
-            <p className="text-graphite-400 mt-2 text-sm">
-              Менеджер VPN подписок
-            </p>
+            <p className="text-graphite-400 mt-2 text-sm">Менеджер VPN подписок</p>
           </div>
 
           {/* Login Form */}
           <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-2xl">
-            <h2 className="text-xl font-semibold text-graphite-100 mb-1">
-              {loginTitle}
-            </h2>
-            <p className="text-graphite-400 text-sm mb-6">
-              {loginSubtitle}
-            </p>
+            <h2 className="text-xl font-semibold text-graphite-100 mb-1">{loginTitle}</h2>
+            <p className="text-graphite-400 text-sm mb-6">{loginSubtitle}</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -136,9 +135,7 @@ export default function LoginPage() {
               </div>
 
               {error && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 animate-fade-in">
-                  {error}
-                </div>
+                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 animate-fade-in">{error}</div>
               )}
 
               <button type="submit" disabled={loading}

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
 
-// Public settings endpoint — no auth required (for login page, etc.)
+export const dynamic = "force-dynamic";
+
+// Public settings — no auth, never throws
 export async function GET() {
   try {
     const rows = await db.select().from(settings);
@@ -12,6 +14,7 @@ export async function GET() {
     }
     return NextResponse.json(obj);
   } catch {
+    // Table may not exist — return empty
     return NextResponse.json({});
   }
 }

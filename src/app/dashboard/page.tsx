@@ -30,44 +30,53 @@ export default function DashboardPage() {
 
   const loadSubs = useCallback(async () => {
     try {
-      const [subsRes, cfgRes] = await Promise.all([
-        fetch("/api/subscriptions"),
-        fetch("/api/settings").then(r => r.json()).catch(() => ({})),
-      ]);
-      if (subsRes.status === 401) {
+      const res = await fetch("/api/subscriptions");
+      if (res.status === 401) {
         router.push("/");
         return;
       }
-      const data = await subsRes.json();
+      const data = await res.json();
       setSubs(data);
-      setCfg(cfgRes || {});
     } catch {
       // ignore
     }
     setLoading(false);
   }, [router]);
 
+  // Load settings separately — non-blocking
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.ok ? r.json() : {})
+      .then((data) => setCfg(data || {}))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     loadSubs();
   }, [loadSubs]);
 
-  // Apply settings: accent color, font
+  // Apply accent color
   useEffect(() => {
-    if (cfg.accentColor) {
-      document.documentElement.style.setProperty("--color-accent-500", cfg.accentColor);
-      document.documentElement.style.setProperty("--color-accent-DEFAULT", cfg.accentColor);
-    }
-    if (cfg.fontSize) {
-      document.documentElement.style.fontSize = `${cfg.fontSize}px`;
-    }
-    if (cfg.fontFamily) {
-      document.body.style.fontFamily = cfg.fontFamily;
-    }
-    return () => {
-      document.documentElement.style.fontSize = "";
-      document.body.style.fontFamily = "";
-    };
-  }, [cfg]);
+    if (!cfg.accentColor) return;
+    const c = cfg.accentColor;
+    document.documentElement.style.setProperty("--color-accent-500", c);
+    document.documentElement.style.setProperty("--color-accent-DEFAULT", c);
+    document.documentElement.style.setProperty("--color-accent-600", c);
+    document.documentElement.style.setProperty("--color-accent-700", c);
+    document.documentElement.style.setProperty("--color-accent-400", c);
+  }, [cfg.accentColor]);
+
+  useEffect(() => {
+    if (!cfg.fontSize) return;
+    document.documentElement.style.fontSize = `${cfg.fontSize}px`;
+    return () => { document.documentElement.style.fontSize = ""; };
+  }, [cfg.fontSize]);
+
+  useEffect(() => {
+    if (!cfg.fontFamily) return;
+    document.body.style.fontFamily = cfg.fontFamily;
+    return () => { document.body.style.fontFamily = ""; };
+  }, [cfg.fontFamily]);
 
   const getSubUrl = (slug: string) => {
     return `${window.location.origin}/api/sub/${slug}`;
