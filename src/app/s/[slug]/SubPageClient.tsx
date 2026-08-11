@@ -127,41 +127,25 @@ export default function SubPageClient({
     setShowQr(true);
   };
 
-  const openInClient = async (client: VpnClient) => {
-    setShowClients(false);
+  const [clipboardMsg, setClipboardMsg] = useState("");
 
-    // Special handling for Happ: preload clipboard + multiple deeplink fallbacks
+  const openInClient = async (client: VpnClient) => {
+    // For Happ: copy to clipboard + show instruction
+    // Happ imports subscriptions from clipboard, not via custom deeplink
     if (client.name === "Happ") {
       try {
         await navigator.clipboard.writeText(subUrl);
+        setClipboardMsg("Ссылка скопирована! Откройте Happ → нажмите + → Буфер обмена");
+        setTimeout(() => setClipboardMsg(""), 5000);
       } catch {
-        // ignore clipboard failure
+        setClipboardMsg("Не удалось скопировать. Скопируйте ссылку вручную");
+        setTimeout(() => setClipboardMsg(""), 3000);
       }
-
-      const rawLink = `happ://import/${subUrl}`;
-      const encodedLink = `happ://import/${encodeURIComponent(subUrl)}`;
-      const appOnlyLink = "happ://";
-
-      // 1) Try raw import format
-      window.location.href = rawLink;
-
-      // 2) Fallback to encoded import format if app did not open
-      setTimeout(() => {
-        if (document.visibilityState === "visible") {
-          window.location.href = encodedLink;
-        }
-      }, 500);
-
-      // 3) Final fallback: just open Happ with prepared clipboard
-      setTimeout(() => {
-        if (document.visibilityState === "visible") {
-          window.location.href = appOnlyLink;
-        }
-      }, 1000);
-
+      setShowClients(false);
       return;
     }
 
+    setShowClients(false);
     window.location.href = client.urlScheme(subUrl);
   };
 
@@ -307,6 +291,13 @@ export default function SubPageClient({
             </button>
           </div>
         </div>
+
+        {/* Clipboard notification */}
+        {clipboardMsg && (
+          <div className="mt-6 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-xl px-4 py-3 text-center animate-fade-in">
+            {clipboardMsg}
+          </div>
+        )}
 
         <p className="text-center text-graphite-700 text-xs mt-8">
           SubManager by LarsGravesen
