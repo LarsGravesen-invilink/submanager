@@ -10,12 +10,18 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rows = await db.select().from(settings);
-  const obj: Record<string, string> = {};
-  for (const r of rows) {
-    obj[r.key] = r.value;
+  try {
+    const rows = await db.select().from(settings);
+    const obj: Record<string, string> = {};
+    for (const r of rows) {
+      obj[r.key] = r.value;
+    }
+    return NextResponse.json(obj);
+  } catch (e) {
+    console.error("Settings GET error:", e);
+    // Table might not exist yet
+    return NextResponse.json({});
   }
-  return NextResponse.json(obj);
 }
 
 export async function PUT(req: Request) {
@@ -24,24 +30,31 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body: Record<string, string> = await req.json();
+  try {
+    const body: Record<string, string> = await req.json();
 
-  for (const [key, value] of Object.entries(body)) {
-    const existing = await db
-      .select()
-      .from(settings)
-      .where(eq(settings.key, key))
-      .limit(1);
+    for (const [key, value] of Object.entries(body)) {
+      const strValue = String(value ?? "");
+      const existing = await db
+        .select()
+        .from(settings)
+        .where(eq(settings.key, key))
+        .limit(1);
 
-    if (existing.length > 0) {
-      await db
-        .update(settings)
-        .set({ value: String(value) })
-        .where(eq(settings.key, key));
-    } else {
-      await db.insert(settings).values({ key, value: String(value) });
+      if (existing.length > 0) {
+        await db
+          .update(settings)
+          .set({ value: strValue })
+          .where(eq(settings.key, key));
+      } else {
+        await db.insert(settings).values({ key, value: strValue });
+      }
     }
-  }
 
-  return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    console.error("Settings PUT error:", e);
+    const msg = e instanceof Error ? e.message : "Ошибка сохранения настроек";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

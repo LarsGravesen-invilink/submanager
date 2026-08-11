@@ -275,29 +275,41 @@ export default function SettingsPage() {
     }
   };
 
+  const [saveError, setSaveError] = useState("");
+
   const handleSave = async () => {
     setSaving(true);
-    await fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        serviceName,
-        headerTitle,
-        footerText,
-        loginTitle,
-        loginSubtitle,
-        logoUrl,
-        logoSize,
-        accentColor,
-        fontSize: String(fontSize),
-        fontFamily,
-        customFontName,
-        customFontUrl,
-      }),
-    });
+    setSaveError("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          serviceName,
+          headerTitle,
+          footerText,
+          loginTitle,
+          loginSubtitle,
+          logoUrl,
+          logoSize,
+          accentColor,
+          fontSize: String(fontSize),
+          fontFamily,
+          customFontName,
+          customFontUrl,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setSaveError(data.error || "Ошибка сохранения");
+      } else {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch {
+      setSaveError("Ошибка сети");
+    }
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   };
 
   const logoSizeClass = { small: "h-10", medium: "h-16", large: "h-24" }[logoSize] || "h-16";
@@ -519,6 +531,13 @@ export default function SettingsPage() {
             <input ref={backupFileRef} type="file" accept=".json" onChange={handleImportBackup} className="hidden" />
           </div>
         </section>
+
+        {/* Save error */}
+        {saveError && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3 animate-fade-in">
+            {saveError}
+          </div>
+        )}
 
         {/* Save */}
         <div className="flex gap-3 justify-end pb-8">
