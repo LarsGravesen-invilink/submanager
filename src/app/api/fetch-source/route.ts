@@ -37,6 +37,16 @@ export async function POST(req: Request) {
       fingerprint: keyFingerprint(k),
     }));
 
+    if (parsed.length === 0) {
+      return NextResponse.json(
+        {
+          error: "Источник загружен, но конфигурации не распознаны. Проверьте формат JSON/подписки.",
+          status: "error",
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json({ keys: parsed, status: "ok" });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Неизвестная ошибка";
