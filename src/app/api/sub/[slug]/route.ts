@@ -131,11 +131,14 @@ export async function GET(
   const encodeTitle = (text: string) =>
     `base64:${Buffer.from(text, "utf-8").toString("base64")}`;
 
+  // Dummy key for clients that require at least one key (e.g. Incy)
+  const DUMMY_KEY = "vless://00000000-0000-0000-0000-000000000000@127.0.0.1:1?encryption=none&type=tcp&security=none";
+
   // ==== Paused ====
   if (!sub.isActive) {
     if (isBrowser) return redirectToBrowserPage();
 
-    const reason = sub.pauseReason || "Подписка приостановлена";
+    const reason = (sub.pauseReason as string) || "Подписка приостановлена";
     const bKeys = (sub.backupKeys as string[] | null) || [];
     const lines: string[] = [];
 
@@ -156,8 +159,13 @@ export async function GET(
       }
     }
 
+    // If no backup keys, add dummy so clients like Incy can parse the subscription
+    if (lines.length === 0) {
+      lines.push(DUMMY_KEY + "#" + encodeURIComponent(reason));
+    }
+
     const content = lines.join("\n");
-    return new NextResponse(content ? Buffer.from(content, "utf-8").toString("base64") : "", {
+    return new NextResponse(Buffer.from(content, "utf-8").toString("base64"), {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -173,11 +181,13 @@ export async function GET(
 
   if (isExpired) {
     if (isBrowser) return redirectToBrowserPage();
-    return new NextResponse("", {
+    // Dummy key with expiry name so clients like Incy can parse
+    const expiredContent = DUMMY_KEY + "#" + encodeURIComponent("🚫ИСТЁК СРОК🚫");
+    return new NextResponse(Buffer.from(expiredContent, "utf-8").toString("base64"), {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Profile-Title": encodeTitle("Подписка истекла"),
+        "Profile-Title": encodeTitle("🚫 Подписка истекла"),
         "Profile-Title-Encode": "base64",
         "Subscription-Userinfo": `upload=0; download=0; total=0; expire=${Math.floor(new Date(sub.expiresAt!).getTime() / 1000)}`,
         "Profile-Update-Interval": "1",

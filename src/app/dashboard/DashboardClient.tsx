@@ -71,14 +71,17 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const handlePauseClick = (sub: Subscription) => {
+  const handlePauseClick = async (sub: Subscription) => {
     if (!sub.isActive) {
-      // Resume — clear pause data
-      fetch(`/api/subscriptions/${sub.id}`, {
+      // Resume — clear pause data, keep existing keys untouched
+      await fetch(`/api/subscriptions/${sub.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: true, pauseReason: "", backupKeys: [] }),
-      }).then(() => loadSubs());
+      });
+      setPauseMsg("Подписка возобновлена");
+      setTimeout(() => setPauseMsg(""), 3000);
+      loadSubs();
       return;
     }
     // Show pause modal
