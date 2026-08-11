@@ -10,34 +10,44 @@ interface VpnClient {
 
 const VPN_CLIENTS: VpnClient[] = [
   {
-    name: "Happ",
-    icon: "🟢",
-    urlScheme: (url) => `happ://add-sub?url=${encodeURIComponent(url)}`,
-  },
-  {
-    name: "Incy",
-    icon: "🔵",
-    urlScheme: (url) => `incy://install-sub?url=${encodeURIComponent(url)}`,
-  },
-  {
-    name: "V2RayNG",
-    icon: "🟣",
-    urlScheme: (url) => `v2rayng://install-config?url=${encodeURIComponent(url)}`,
-  },
-  {
-    name: "Streisand",
-    icon: "⚡",
-    urlScheme: (url) => `streisand://import/${url}`,
-  },
-  {
     name: "Hiddify",
-    icon: "🟡",
+    icon: "#EAB308",
     urlScheme: (url) => `hiddify://import/${url}`,
   },
   {
+    name: "V2RayNG",
+    icon: "#8B5CF6",
+    urlScheme: (url) => `v2rayng://install-sub?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: "Streisand",
+    icon: "#3B82F6",
+    urlScheme: (url) => `streisand://import/${url}`,
+  },
+  {
+    name: "Happ",
+    icon: "#22C55E",
+    urlScheme: (url) => `happ://import/${url}`,
+  },
+  {
+    name: "Incy",
+    icon: "#06B6D4",
+    urlScheme: (url) => `incy://import/${url}`,
+  },
+  {
     name: "Shadowrocket",
-    icon: "🚀",
-    urlScheme: (url) => `sub://add?url=${encodeURIComponent(url)}`,
+    icon: "#F97316",
+    urlScheme: (url) => { try { return `sub://${window.btoa(url)}`; } catch { return `sub://${url}`; } },
+  },
+  {
+    name: "NekoBox",
+    icon: "#EC4899",
+    urlScheme: (url) => `sn://subscription?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: "Clash",
+    icon: "#6366F1",
+    urlScheme: (url) => `clash://install-config?url=${encodeURIComponent(url)}`,
   },
 ];
 
@@ -311,7 +321,7 @@ export default function SubPageClient({
                   onClick={() => openInClient(client)}
                   className="flex items-center gap-3 bg-graphite-800 hover:bg-graphite-700 border border-graphite-700 hover:border-accent-500/30 rounded-xl p-4 transition-all text-left"
                 >
-                  <span className="text-2xl">{client.icon}</span>
+                  <span className="w-5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: client.icon }} />
                   <span className="text-sm font-medium text-graphite-200">
                     {client.name}
                   </span>
