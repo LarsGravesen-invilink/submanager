@@ -47,7 +47,7 @@ interface SubData {
   extraConfigsTitle?: string;
   extraConfigs?: {name: string; key: string}[];
   keys: SubKey[];
-  sources: unknown[];
+  sources: {id: string; url: string; lastStatus: string; selectedKeys: string[]; keyNames: Record<string, string>}[];
   logs: LogEntry[];
 }
 
@@ -83,6 +83,8 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [enableExtraConfigs, setEnableExtraConfigs] = useState(false);
   const [extraConfigsTitle, setExtraConfigsTitle] = useState("");
   const [extraConfigs, setExtraConfigs] = useState<{name: string; key: string}[]>([{name: "", key: ""}]);
+  const [newSourceUrl, setNewSourceUrl] = useState("");
+  const [addingSource, setAddingSource] = useState(false);
   const [keys, setKeys] = useState<SubKey[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -142,6 +144,73 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     const reader = new FileReader();
     reader.onload = (ev) => { const r = ev.target?.result as string; setLogoPreview(r); setLogoUrl(r); };
     reader.readAsDataURL(file);
+  };
+
+  const addSource = async () => {
+    if (!newSourceUrl.trim() || !sub) return;
+    setAddingSource(true);
+    try {
+      const res = await fetch("/api/fetch-source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: newSourceUrl.trim() }),
+      });
+      const data = await res.json();
+      if (data.keys && data.keys.length > 0) {
+        // Save source and keys to subscription
+        await fetch(`/api/subscriptions/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sources: [
+              ...sub.sources,
+              { url: newSourceUrl.trim(), selectedKeys: data.keys.map((k: {fingerprint: string}) => k.fingerprint), keyNames: {}, lastStatus: "ok" },
+            ],
+          }),
+        });
+        // Add keys
+        for (const k of data.keys) {
+          await fetch(`/api/subscriptions/${id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              keys: [
+                ...keys.map(ek => ({ value: ek.keyValue, customName: ek.customName, sourceType: ek.sourceType, sourceUrl: ek.sourceUrl, isEnabled: ek.isEnabled })),
+                { value: k.value, customName: "", sourceType: "remote", sourceUrl: newSourceUrl.trim(), isEnabled: true },
+              ],
+            }),
+          });
+        }
+        setNewSourceUrl("");
+        loadSub();
+      } else {
+        setError(data.error || "Не удалось загрузить ключи из источника");
+      }
+    } catch {
+      setError("Ошибка загрузки источника");
+    }
+    setAddingSource(false);
+  };
+
+  const removeSource = async (sourceUrl: string) => {
+    if (!sub) return;
+    // Remove source and its keys
+    const newSources = sub.sources.filter(s => s.url !== sourceUrl);
+    const newKeys = keys.filter(k => k.sourceUrl !== sourceUrl);
+    await fetch(`/api/subscriptions/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sources: newSources.map(s => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus })),
+        keys: newKeys.map(k => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled })),
+      }),
+    });
+    loadSub();
+  };
+
+  const refreshSources = async () => {
+    await fetch(`/api/subscriptions/${id}/refresh`, { method: "POST" });
+    loadSub();
   };
 
   const handleSave = async () => {
@@ -244,6 +313,36 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
                   placeholder={key.originalName ? `Оригинальное: ${key.originalName}` : "Имя ключа в клиенте"} />
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Sources */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-graphite-100">Источники ({sub.sources.length})</h2>
+            <button onClick={refreshSources} className="text-xs text-accent-400 hover:text-accent-300 transition-colors flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              Обновить все
+            </button>
+          </div>
+          {sub.sources.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {sub.sources.map((src) => (
+                <div key={src.id} className="flex items-center gap-2 bg-graphite-800/50 rounded-xl p-3">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${src.lastStatus === "ok" ? "bg-emerald-400" : src.lastStatus === "error" ? "bg-red-400" : "bg-yellow-400"}`} />
+                  <span className="flex-1 text-sm text-graphite-300 font-mono truncate">{src.url}</span>
+                  <button onClick={() => removeSource(src.url)} className="text-graphite-600 hover:text-red-400 transition-colors flex-shrink-0">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input value={newSourceUrl} onChange={(e) => setNewSourceUrl(e.target.value)} className="flex-1 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono" placeholder="https://... — ссылка на подписку" />
+            <button onClick={addSource} disabled={addingSource || !newSourceUrl.trim()} className="px-4 py-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium transition-all disabled:opacity-50 flex-shrink-0">
+              {addingSource ? "..." : "+"}
+            </button>
           </div>
         </section>
 

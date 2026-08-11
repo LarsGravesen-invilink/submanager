@@ -79,9 +79,14 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: true, pauseReason: "", backupKeys: [] }),
       });
-      setPauseMsg("Подписка возобновлена");
-      setTimeout(() => setPauseMsg(""), 3000);
+      setPauseMsg("Подписка возобновлена. Обновление ключей через 15 сек...");
+      setTimeout(() => setPauseMsg(""), 5000);
       loadSubs();
+      // Auto-refresh sources after 15 seconds
+      setTimeout(async () => {
+        await fetch(`/api/subscriptions/${sub.id}/refresh`, { method: "POST" });
+        loadSubs();
+      }, 15000);
       return;
     }
     // Show pause modal

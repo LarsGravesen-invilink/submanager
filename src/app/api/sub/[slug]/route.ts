@@ -161,7 +161,7 @@ export async function GET(
 
     // If no backup keys, add dummy so clients like Incy can parse the subscription
     if (lines.length === 0) {
-      lines.push(DUMMY_KEY + "#" + encodeURIComponent(reason));
+      lines.push(DUMMY_KEY + "#" + encodeURIComponent("🚫ИСТЁК СРОК🚫"));
     }
 
     const content = lines.join("\n");
