@@ -127,9 +127,42 @@ export default function SubPageClient({
     setShowQr(true);
   };
 
-  const openInClient = (client: VpnClient) => {
-    window.location.href = client.urlScheme(subUrl);
+  const openInClient = async (client: VpnClient) => {
     setShowClients(false);
+
+    // Special handling for Happ: preload clipboard + multiple deeplink fallbacks
+    if (client.name === "Happ") {
+      try {
+        await navigator.clipboard.writeText(subUrl);
+      } catch {
+        // ignore clipboard failure
+      }
+
+      const rawLink = `happ://import/${subUrl}`;
+      const encodedLink = `happ://import/${encodeURIComponent(subUrl)}`;
+      const appOnlyLink = "happ://";
+
+      // 1) Try raw import format
+      window.location.href = rawLink;
+
+      // 2) Fallback to encoded import format if app did not open
+      setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          window.location.href = encodedLink;
+        }
+      }, 500);
+
+      // 3) Final fallback: just open Happ with prepared clipboard
+      setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          window.location.href = appOnlyLink;
+        }
+      }, 1000);
+
+      return;
+    }
+
+    window.location.href = client.urlScheme(subUrl);
   };
 
   const logoSizeClass = {
