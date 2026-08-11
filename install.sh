@@ -101,8 +101,13 @@ echo ""
 # ===================== Зависимости =====================
 echo -e "${CYAN}[1/7]${NC} Установка системных зависимостей..."
 apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl git dnsutils nginx certbot python3-certbot-nginx > /dev/null 2>&1
-echo -e "  ${GREEN}✓${NC} Системные пакеты установлены"
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl git dnsutils nginx certbot python3-certbot-nginx ntp > /dev/null 2>&1
+
+# Синхронизация времени по МСК
+timedatectl set-timezone Europe/Moscow 2>/dev/null || true
+systemctl enable ntp 2>/dev/null || true
+systemctl start ntp 2>/dev/null || true
+echo -e "  ${GREEN}✓${NC} Системные пакеты установлены, часовой пояс: МСК"
 
 # ===================== Node.js =====================
 echo -e "${CYAN}[2/7]${NC} Установка Node.js 20..."
@@ -167,6 +172,7 @@ DATABASE_URL=postgresql://${DB_USER}:${DB_PASS}@127.0.0.1:5432/${DB_NAME}
 JWT_SECRET=${JWT_SECRET}
 NODE_ENV=production
 PORT=${INTERNAL_PORT}
+TZ=Europe/Moscow
 EOF
 
 # Создаём таблицы напрямую через SQL

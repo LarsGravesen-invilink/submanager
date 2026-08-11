@@ -46,6 +46,9 @@ DB_USER=$(grep -oP 'postgresql://\K[^:]+' "$INSTALL_DIR/.env")
 DB_PASS=$(grep -oP '://[^:]+:\K[^@]+' "$INSTALL_DIR/.env")
 DB_NAME=$(grep -oP '@[^/]+/\K[^\?]+' "$INSTALL_DIR/.env" | head -1)
 
+# Синхронизация времени МСК
+timedatectl set-timezone Europe/Moscow 2>/dev/null || true
+
 echo -e "${CYAN}[1/4]${NC} Скачивание новой сборки..."
 curl -fSL --retry 3 --retry-delay 2 -o /tmp/submanager-dist.tar.gz "$DIST_URL" || {
   echo -e "${RED}✗ Ошибка загрузки${NC}"

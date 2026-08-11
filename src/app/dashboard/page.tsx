@@ -20,7 +20,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
   const [extendModal, setExtendModal] = useState<Subscription | null>(null);
+  const [extendType, setExtendType] = useState<"months" | "days" | "hours">("days");
+  const [extendMonths, setExtendMonths] = useState(1);
   const [extendDays, setExtendDays] = useState(30);
+  const [extendHours, setExtendHours] = useState(24);
+  const [extendMinutes, setExtendMinutes] = useState(0);
   const router = useRouter();
 
   const loadSubs = useCallback(async () => {
@@ -70,15 +74,15 @@ export default function DashboardPage() {
   const extendSubscription = async () => {
     if (!extendModal) return;
     const newExpiry = new Date();
-    newExpiry.setDate(newExpiry.getDate() + extendDays);
-    
+    switch (extendType) {
+      case "months": newExpiry.setMonth(newExpiry.getMonth() + extendMonths); break;
+      case "days": newExpiry.setDate(newExpiry.getDate() + extendDays); break;
+      case "hours": newExpiry.setHours(newExpiry.getHours() + extendHours); newExpiry.setMinutes(newExpiry.getMinutes() + extendMinutes); break;
+    }
     await fetch(`/api/subscriptions/${extendModal.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        expiresAt: newExpiry.toISOString(),
-        isActive: true 
-      }),
+      body: JSON.stringify({ expiresAt: newExpiry.toISOString(), isActive: true }),
     });
     setExtendModal(null);
     loadSubs();
@@ -349,23 +353,21 @@ export default function DashboardPage() {
       {extendModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
-            <h3 className="text-lg font-semibold text-graphite-100 mb-4">
+            <h3 className="text-lg font-semibold text-graphite-100 mb-2">
               Продлить подписку
             </h3>
-            <p className="text-graphite-400 text-sm mb-4">
-              {extendModal.name}
-            </p>
+            <p className="text-graphite-400 text-sm mb-4">{extendModal.name}</p>
+            <div className="flex gap-2 mb-4">
+              {(["months", "days", "hours"] as const).map((t) => (
+                <button key={t} onClick={() => setExtendType(t)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${extendType === t ? "bg-accent-500 text-white" : "bg-graphite-800 text-graphite-400 border border-graphite-700"}`}>
+                  {t === "months" && "Месяцы"}{t === "days" && "Дни"}{t === "hours" && "Часы"}
+                </button>
+              ))}
+            </div>
             <div className="mb-4">
-              <label className="block text-sm text-graphite-400 mb-1.5">
-                Продлить на (дней)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={extendDays}
-                onChange={(e) => setExtendDays(Number(e.target.value))}
-                className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all"
-              />
+              {extendType === "months" && <div className="flex items-center gap-2"><input type="number" min={1} value={extendMonths} onChange={(e) => setExtendMonths(Number(e.target.value) || 1)} onFocus={(e) => e.target.select()} className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400 text-sm">месяц(ев)</span></div>}
+              {extendType === "days" && <div className="flex items-center gap-2"><input type="number" min={1} value={extendDays} onChange={(e) => setExtendDays(Number(e.target.value) || 1)} onFocus={(e) => e.target.select()} className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400 text-sm">дней</span></div>}
+              {extendType === "hours" && <div className="flex items-center gap-2"><input type="number" min={0} value={extendHours} onChange={(e) => setExtendHours(Number(e.target.value) || 0)} onFocus={(e) => e.target.select()} className="w-20 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400 text-sm">ч.</span><input type="number" min={0} max={59} value={extendMinutes} onChange={(e) => setExtendMinutes(Number(e.target.value) || 0)} onFocus={(e) => e.target.select()} className="w-20 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400 text-sm">мин.</span></div>}
             </div>
             <div className="flex gap-3">
               <button
