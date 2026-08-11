@@ -134,7 +134,13 @@ export function parseSubscriptionContent(content: string): string[] {
     }
   }
 
-  // 3) Plain text / embedded URLs
+  // 3) Try Clash YAML (proxies: section)
+  const clashKeys = parseClashYaml(trimmed);
+  if (clashKeys.length > 0) {
+    return dedupeKeys(clashKeys);
+  }
+
+  // 4) Plain text / embedded URLs
   const keys: string[] = [];
 
   // Regex extraction from arbitrary text
@@ -198,8 +204,17 @@ function extractKeysFromUnknown(value: unknown, depth = 0): string[] {
   if (typeof value === "object") {
     const o = value as Record<string, unknown>;
 
-    // A raw proxy object like sing-box/v2ray/clash-ish JSON
-    const protocol = typeof o.type === "string" ? o.type : typeof o.protocol === "string" ? o.protocol : "";
+    // Xray JSON format: outbounds with protocol + settings.vnext
+    const protocol = typeof o.protocol === "string" ? o.protocol : typeof o.type === "string" ? o.type : "";
+    if (protocol && o.settings && typeof o.settings === "object") {
+      const xrayKeys = extractKeysFromXrayOutbound(o);
+      if (xrayKeys.length > 0) {
+        keys.push(...xrayKeys);
+        return keys;
+      }
+    }
+
+    // sing-box / clash-style proxy object
     if (protocol) {
       keys.push(...extractKeysFromJson({ outbounds: [normalizeProxyObject(o)] }));
     }
@@ -369,4 +384,183 @@ function extractKeysFromJson(json: { outbounds?: unknown[] }): string[] {
   }
 
   return keys;
+}
+
+// Parse Xray JSON outbound format (protocol + settings.vnext/servers)
+function extractKeysFromXrayOutbound(o: Record<string, unknown>): string[] {
+  const keys: string[] = [];
+  const protocol = (o.protocol as string) || "";
+  const settings = o.settings as Record<string, unknown> | undefined;
+  const stream = o.streamSettings as Record<string, unknown> | undefined;
+  const tag = (o.tag as string) || (o.remarks as string) || "";
+
+  if (!settings) return keys;
+
+  const security = (stream?.security as string) || "none";
+  const network = (stream?.network as string) || "tcp";
+
+  if (protocol === "vless" && settings.vnext && Array.isArray(settings.vnext)) {
+    for (const vn of settings.vnext) {
+      const v = vn as Record<string, unknown>;
+      const server = v.address as string;
+      const port = v.port as number;
+      const users = v.users as Record<string, unknown>[] | undefined;
+      if (!server || !port || !users) continue;
+      for (const user of users) {
+        const uuid = (user.id as string) || "";
+        const flow = (user.flow as string) || "";
+        let params = `encryption=none&type=${network}&security=${security}`;
+        if (flow) params += `&flow=${flow}`;
+        if (security === "tls" || security === "reality") {
+          const tlsSettings = (stream?.tlsSettings || stream?.realitySettings) as Record<string, unknown> | undefined;
+          if (tlsSettings?.serverName) params += `&sni=${tlsSettings.serverName}`;
+          if (security === "reality") {
+            if (tlsSettings?.publicKey) params += `&pbk=${tlsSettings.publicKey}`;
+            if (tlsSettings?.shortId) params += `&sid=${tlsSettings.shortId}`;
+            if (tlsSettings?.fingerprint) params += `&fp=${tlsSettings.fingerprint}`;
+          }
+        }
+        const name = tag || `${server}:${port}`;
+        keys.push(`vless://${uuid}@${server}:${port}?${params}#${encodeURIComponent(name)}`);
+      }
+    }
+  } else if (protocol === "vmess" && settings.vnext && Array.isArray(settings.vnext)) {
+    for (const vn of settings.vnext) {
+      const v = vn as Record<string, unknown>;
+      const server = v.address as string;
+      const port = v.port as number;
+      const users = v.users as Record<string, unknown>[] | undefined;
+      if (!server || !port || !users) continue;
+      for (const user of users) {
+        const vmessObj: Record<string, unknown> = {
+          v: "2", ps: tag || `${server}:${port}`, add: server, port,
+          id: user.id || "", aid: user.alterId || 0,
+          net: network, type: "none", host: "", path: "",
+          tls: security === "tls" ? "tls" : "",
+        };
+        keys.push("vmess://" + Buffer.from(JSON.stringify(vmessObj), "utf-8").toString("base64"));
+      }
+    }
+  } else if (protocol === "trojan" && settings.servers && Array.isArray(settings.servers)) {
+    for (const srv of settings.servers) {
+      const s = srv as Record<string, unknown>;
+      const server = s.address as string;
+      const port = s.port as number;
+      const password = (s.password as string) || "";
+      const name = tag || `${server}:${port}`;
+      keys.push(`trojan://${password}@${server}:${port}?security=tls#${encodeURIComponent(name)}`);
+    }
+  } else if (protocol === "shadowsocks" && settings.servers && Array.isArray(settings.servers)) {
+    for (const srv of settings.servers) {
+      const s = srv as Record<string, unknown>;
+      const server = s.address as string;
+      const port = s.port as number;
+      const method = (s.method as string) || "aes-256-gcm";
+      const password = (s.password as string) || "";
+      const name = tag || `${server}:${port}`;
+      const userinfo = Buffer.from(`${method}:${password}`).toString("base64");
+      keys.push(`ss://${userinfo}@${server}:${port}#${encodeURIComponent(name)}`);
+    }
+  }
+
+  return keys;
+}
+
+// Parse Clash YAML proxies section (simplified - no YAML dependency)
+function parseClashYaml(content: string): string[] {
+  const keys: string[] = [];
+  // Quick check: does it look like Clash YAML?
+  if (!content.includes("proxies:") && !content.includes("Proxy:")) return keys;
+
+  const lines = content.split("\n");
+  let inProxies = false;
+  let currentProxy: Record<string, string> = {};
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    if (/^\s*proxies:\s*$/.test(line) || /^\s*Proxy:\s*$/.test(line)) {
+      inProxies = true;
+      continue;
+    }
+    if (inProxies) {
+      if (/^\S/.test(line) && !line.startsWith(" ") && !line.startsWith("-")) {
+        inProxies = false;
+        if (Object.keys(currentProxy).length > 0) {
+          const k = clashProxyToKey(currentProxy);
+          if (k) keys.push(k);
+          currentProxy = {};
+        }
+        continue;
+      }
+      if (/^\s*-\s+/.test(line)) {
+        if (Object.keys(currentProxy).length > 0) {
+          const k = clashProxyToKey(currentProxy);
+          if (k) keys.push(k);
+        }
+        currentProxy = {};
+        const inlineMatch = line.match(/^\s*-\s*\{(.+)\}\s*$/);
+        if (inlineMatch) {
+          const pairs = inlineMatch[1].split(",").map((p: string) => p.trim());
+          for (const pair of pairs) {
+            const colonIdx = pair.indexOf(":");
+            if (colonIdx > 0) {
+              const k = pair.slice(0, colonIdx).trim();
+              const v = pair.slice(colonIdx + 1).trim().replace(/^["']|["']$/g, "");
+              currentProxy[k] = v;
+            }
+          }
+          continue;
+        }
+        const kvMatch = line.match(/^\s*-\s+(\w[\w-]*):\s*(.+)$/);
+        if (kvMatch) currentProxy[kvMatch[1]] = kvMatch[2].trim().replace(/^["']|["']$/g, "");
+        continue;
+      }
+      const kvMatch = line.match(/^\s+(\w[\w-]*):\s*(.+)$/);
+      if (kvMatch && Object.keys(currentProxy).length > 0) {
+        currentProxy[kvMatch[1]] = kvMatch[2].trim().replace(/^["']|["']$/g, "");
+      }
+    }
+  }
+  if (Object.keys(currentProxy).length > 0) {
+    const k = clashProxyToKey(currentProxy);
+    if (k) keys.push(k);
+  }
+  return keys;
+}
+
+function clashProxyToKey(p: Record<string, string>): string | null {
+  const type = p.type;
+  const server = p.server;
+  const port = p.port;
+  const name = p.name || `${server}:${port}`;
+  if (!type || !server || !port) return null;
+
+  if (type === "vless") {
+    const uuid = p.uuid || "";
+    let params = `encryption=none&type=${p.network || "tcp"}&security=${p.tls === "true" || p.security === "tls" ? "tls" : "none"}`;
+    if (p.servername) params += `&sni=${p.servername}`;
+    return `vless://${uuid}@${server}:${port}?${params}#${encodeURIComponent(name)}`;
+  }
+  if (type === "vmess") {
+    const vmessObj: Record<string, unknown> = {
+      v: "2", ps: name, add: server, port: Number(port),
+      id: p.uuid || "", aid: Number(p.alterId || 0),
+      net: p.network || "tcp", type: "none",
+      host: p.host || "", path: p.path || "",
+      tls: p.tls === "true" ? "tls" : "",
+    };
+    return "vmess://" + Buffer.from(JSON.stringify(vmessObj), "utf-8").toString("base64");
+  }
+  if (type === "trojan") {
+    const password = p.password || "";
+    const sni = p.sni || p.servername || server;
+    return `trojan://${password}@${server}:${port}?security=tls&sni=${encodeURIComponent(sni)}#${encodeURIComponent(name)}`;
+  }
+  if (type === "ss") {
+    const method = p.cipher || "aes-256-gcm";
+    const password = p.password || "";
+    const userinfo = Buffer.from(`${method}:${password}`).toString("base64");
+    return `ss://${userinfo}@${server}:${port}#${encodeURIComponent(name)}`;
+  }
+  return null;
 }
