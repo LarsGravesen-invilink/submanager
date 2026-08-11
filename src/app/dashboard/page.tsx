@@ -25,17 +25,22 @@ export default function DashboardPage() {
   const [extendDays, setExtendDays] = useState(30);
   const [extendHours, setExtendHours] = useState(24);
   const [extendMinutes, setExtendMinutes] = useState(0);
+  const [cfg, setCfg] = useState<Record<string, string>>({});
   const router = useRouter();
 
   const loadSubs = useCallback(async () => {
     try {
-      const res = await fetch("/api/subscriptions");
-      if (res.status === 401) {
+      const [subsRes, cfgRes] = await Promise.all([
+        fetch("/api/subscriptions"),
+        fetch("/api/settings").then(r => r.json()).catch(() => ({})),
+      ]);
+      if (subsRes.status === 401) {
         router.push("/");
         return;
       }
-      const data = await res.json();
+      const data = await subsRes.json();
       setSubs(data);
+      setCfg(cfgRes || {});
     } catch {
       // ignore
     }
@@ -45,6 +50,24 @@ export default function DashboardPage() {
   useEffect(() => {
     loadSubs();
   }, [loadSubs]);
+
+  // Apply settings: accent color, font
+  useEffect(() => {
+    if (cfg.accentColor) {
+      document.documentElement.style.setProperty("--color-accent-500", cfg.accentColor);
+      document.documentElement.style.setProperty("--color-accent-DEFAULT", cfg.accentColor);
+    }
+    if (cfg.fontSize) {
+      document.documentElement.style.fontSize = `${cfg.fontSize}px`;
+    }
+    if (cfg.fontFamily) {
+      document.body.style.fontFamily = cfg.fontFamily;
+    }
+    return () => {
+      document.documentElement.style.fontSize = "";
+      document.body.style.fontFamily = "";
+    };
+  }, [cfg]);
 
   const getSubUrl = (slug: string) => {
     return `${window.location.origin}/api/sub/${slug}`;
@@ -131,7 +154,7 @@ export default function DashboardPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h1 className="text-lg font-semibold text-graphite-100">SubManager</h1>
+            <h1 className="text-lg font-semibold text-graphite-100">{cfg.headerTitle || "SubManager"}</h1>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -340,6 +363,22 @@ export default function DashboardPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                       </button>
+
+                      {/* Share — mobile only */}
+                      <button
+                        onClick={() => {
+                          const url = getSubUrl(sub.slug);
+                          if (navigator.share) {
+                            navigator.share({ title: sub.name, text: sub.title || sub.name, url }).catch(() => {});
+                          }
+                        }}
+                        className="sm:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-accent-400 border border-graphite-700 hover:border-accent-500/30 transition-all"
+                        title="Поделиться"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -390,7 +429,7 @@ export default function DashboardPage() {
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center">
         <p className="text-graphite-600 text-xs">
-          SubManager by <span className="text-graphite-400 font-medium">LarsGravesen</span>
+          {cfg.footerText || "SubManager by LarsGravesen"}
         </p>
       </footer>
     </div>
