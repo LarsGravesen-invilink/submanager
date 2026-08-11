@@ -58,6 +58,8 @@ export default function SubPageClient({
   logoSize,
   expiresAt,
   isActive,
+  extraConfigsTitle,
+  extraConfigs,
 }: {
   slug: string;
   title: string;
@@ -65,6 +67,8 @@ export default function SubPageClient({
   logoSize: string;
   expiresAt: string | null;
   isActive: boolean;
+  extraConfigsTitle: string;
+  extraConfigs: {name: string; key: string}[];
 }) {
   const [subUrl, setSubUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -128,6 +132,7 @@ export default function SubPageClient({
   };
 
   const [clipboardMsg, setClipboardMsg] = useState("");
+  const [showExtraConfigs, setShowExtraConfigs] = useState(false);
 
   const openInClient = async (client: VpnClient) => {
     // For Happ: copy to clipboard + show instruction
@@ -292,6 +297,31 @@ export default function SubPageClient({
           </div>
         </div>
 
+        {/* Extra Configs Section */}
+        {extraConfigs.length > 0 && (
+          <div className="mt-6 bg-graphite-900 border border-graphite-800 rounded-2xl overflow-hidden shadow-2xl">
+            <button
+              onClick={() => setShowExtraConfigs(true)}
+              className="w-full flex items-center justify-between p-5 text-left hover:bg-graphite-800/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-accent-500/10 border border-accent-500/20 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="text-sm font-medium text-graphite-100 block">{extraConfigsTitle || "Дополнительные конфиги"}</span>
+                  <span className="text-xs text-graphite-500">{extraConfigs.length} конфиг(ов)</span>
+                </div>
+              </div>
+              <svg className="w-5 h-5 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Clipboard notification */}
         {clipboardMsg && (
           <div className="mt-6 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-xl px-4 py-3 text-center animate-fade-in">
@@ -357,6 +387,55 @@ export default function SubPageClient({
               className="w-full py-3 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-300 hover:text-graphite-100 hover:border-graphite-600 transition-all font-medium"
             >
               Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Extra Configs Modal */}
+      {showExtraConfigs && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
+            <h3 className="text-lg font-semibold text-graphite-100 text-center mb-4">
+              {extraConfigsTitle || "Дополнительные конфиги"}
+            </h3>
+            <div className="space-y-2 mb-4">
+              {extraConfigs.map((cfg, idx) => (
+                <button
+                  key={idx}
+                  onClick={async () => {
+                    const key = cfg.key.trim();
+                    // Auto-detect AmneziaWG / WireGuard keys
+                    if (key.startsWith("vpn://") || key.startsWith("awg://") || key.startsWith("amnezia://")) {
+                      // Try to open in AmneziaWG first
+                      window.location.href = key;
+                      // Also copy to clipboard as fallback
+                      try { await navigator.clipboard.writeText(key); } catch {}
+                    } else {
+                      try {
+                        await navigator.clipboard.writeText(key);
+                      } catch {}
+                    }
+                    setShowExtraConfigs(false);
+                    setClipboardMsg(`${cfg.name} — скопировано!`);
+                    setTimeout(() => setClipboardMsg(""), 3000);
+                  }}
+                  className="w-full flex items-center gap-3 bg-graphite-800 hover:bg-graphite-700 border border-graphite-700 hover:border-accent-500/30 rounded-xl p-4 transition-all text-left"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-accent-500/10 border border-accent-500/20 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-medium text-graphite-200">{cfg.name}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowExtraConfigs(false)}
+              className="w-full py-3 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-300 hover:text-graphite-100 hover:border-graphite-600 transition-all font-medium"
+            >
+              Закрыть
             </button>
           </div>
         </div>

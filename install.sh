@@ -259,6 +259,10 @@ EOSQL
 
 # Миграция: добавляем новые столбцы если их нет (для обновления)
 PGPASSWORD="${DB_PASS}" psql -h 127.0.0.1 -U "${DB_USER}" -d "${DB_NAME}" -q 2>/dev/null << 'EOMIGRATE'
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS pause_reason TEXT DEFAULT '';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS backup_keys JSONB DEFAULT '[]';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_configs_title TEXT DEFAULT '';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_configs JSONB DEFAULT '[]';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS logo_size TEXT DEFAULT 'medium';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS show_expiry BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS show_upload BOOLEAN NOT NULL DEFAULT FALSE;

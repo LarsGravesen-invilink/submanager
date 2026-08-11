@@ -76,6 +76,10 @@ export async function PUT(
   if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl;
   if (body.logoSize !== undefined) updateData.logoSize = body.logoSize;
   if (body.pageTitle !== undefined) updateData.pageTitle = body.pageTitle;
+  if (body.extraConfigsTitle !== undefined) updateData.extraConfigsTitle = body.extraConfigsTitle;
+  if (body.extraConfigs !== undefined) updateData.extraConfigs = body.extraConfigs;
+  if (body.pauseReason !== undefined) updateData.pauseReason = body.pauseReason;
+  if (body.backupKeys !== undefined) updateData.backupKeys = body.backupKeys;
   if (body.showExpiry !== undefined) updateData.showExpiry = body.showExpiry;
   if (body.showUpload !== undefined) updateData.showUpload = body.showUpload;
   if (body.showDownload !== undefined) updateData.showDownload = body.showDownload;

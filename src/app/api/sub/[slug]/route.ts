@@ -134,11 +134,34 @@ export async function GET(
   // ==== Paused ====
   if (!sub.isActive) {
     if (isBrowser) return redirectToBrowserPage();
-    return new NextResponse("", {
+
+    const reason = sub.pauseReason || "Подписка приостановлена";
+    const bKeys = (sub.backupKeys as string[] | null) || [];
+    const lines: string[] = [];
+
+    for (let i = 0; i < bKeys.length; i++) {
+      const bk = bKeys[i]?.trim();
+      if (!bk) continue;
+      const bkName = `⚠️Резервный ${i + 1}`;
+      if (bk.startsWith("vmess://")) {
+        try {
+          const decoded = Buffer.from(bk.slice(8), "base64").toString("utf-8");
+          const json = JSON.parse(decoded);
+          json.ps = bkName;
+          lines.push("vmess://" + Buffer.from(JSON.stringify(json), "utf-8").toString("base64"));
+        } catch { lines.push(bk); }
+      } else {
+        const hi = bk.lastIndexOf("#");
+        lines.push((hi !== -1 ? bk.slice(0, hi) : bk) + "#" + encodeURIComponent(bkName));
+      }
+    }
+
+    const content = lines.join("\n");
+    return new NextResponse(content ? Buffer.from(content, "utf-8").toString("base64") : "", {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Profile-Title": encodeTitle("Подписка приостановлена"),
+        "Profile-Title": encodeTitle(reason),
         "Profile-Title-Encode": "base64",
         "Profile-Update-Interval": "1",
       },

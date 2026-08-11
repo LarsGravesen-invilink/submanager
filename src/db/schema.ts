@@ -42,6 +42,12 @@ export const subscriptions = pgTable("subscriptions", {
   logoSize: text("logo_size").default("medium"), // 'small' | 'medium' | 'large'
   pageTitle: text("page_title").default(""),
   // Client display settings JSON
+  // Pause reason & backup keys
+  pauseReason: text("pause_reason").default(""),
+  backupKeys: json("backup_keys").$type<string[]>().default([]),
+  // Extra configs for browser page (AmneziaWG, etc.)
+  extraConfigsTitle: text("extra_configs_title").default(""),
+  extraConfigs: json("extra_configs").$type<{name: string; key: string}[]>().default([]),
   showExpiry: boolean("show_expiry").notNull().default(true),
   showUpload: boolean("show_upload").notNull().default(false),
   showDownload: boolean("show_download").notNull().default(false),

@@ -44,6 +44,8 @@ interface SubData {
   totalTrafficGb?: number;
   usedUploadGb?: number;
   usedDownloadGb?: number;
+  extraConfigsTitle?: string;
+  extraConfigs?: {name: string; key: string}[];
   keys: SubKey[];
   sources: unknown[];
   logs: LogEntry[];
@@ -78,6 +80,9 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [totalTrafficGb, setTotalTrafficGb] = useState(0);
   const [usedUploadGb, setUsedUploadGb] = useState(0);
   const [usedDownloadGb, setUsedDownloadGb] = useState(0);
+  const [enableExtraConfigs, setEnableExtraConfigs] = useState(false);
+  const [extraConfigsTitle, setExtraConfigsTitle] = useState("");
+  const [extraConfigs, setExtraConfigs] = useState<{name: string; key: string}[]>([{name: "", key: ""}]);
   const [keys, setKeys] = useState<SubKey[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -109,6 +114,11 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     setTotalTrafficGb(data.totalTrafficGb || 0);
     setUsedUploadGb(data.usedUploadGb || 0);
     setUsedDownloadGb(data.usedDownloadGb || 0);
+    if (data.extraConfigsTitle || (data.extraConfigs && data.extraConfigs.length > 0)) {
+      setEnableExtraConfigs(true);
+      setExtraConfigsTitle(data.extraConfigsTitle || "");
+      setExtraConfigs([...(data.extraConfigs || []), {name: "", key: ""}]);
+    }
     setKeys(data.keys);
   }, [id, router]);
 
@@ -146,6 +156,8 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           expiresAt: calculateExpiryDate(), logoUrl, pageTitle,
           showExpiry, showUpload, showDownload, showTotal,
           totalTrafficGb, usedUploadGb, usedDownloadGb,
+          extraConfigsTitle: enableExtraConfigs ? extraConfigsTitle : "",
+          extraConfigs: enableExtraConfigs ? extraConfigs.filter(c => c.name.trim() && c.key.trim()) : [],
           keys: keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled })),
         }),
       });
@@ -302,6 +314,40 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
             {showDownload && <div className="ml-4"><label className="block text-xs text-graphite-500 mb-1">Download (ГБ)</label><input type="number" min={0} value={usedDownloadGb} onChange={(e) => setUsedDownloadGb(Number(e.target.value))} className="w-32 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-2 text-sm text-graphite-100 focus:outline-none focus:ring-1 focus:ring-accent-500/50" /></div>}
             {showTotal && <div className="ml-4"><label className="block text-xs text-graphite-500 mb-1">Лимит (ГБ)</label><input type="number" min={0} value={totalTrafficGb} onChange={(e) => setTotalTrafficGb(Number(e.target.value))} className="w-32 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-2 text-sm text-graphite-100 focus:outline-none focus:ring-1 focus:ring-accent-500/50" /></div>}
           </div>
+        </section>
+
+        {/* Extra Configs */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
+          <label className="flex items-center justify-between cursor-pointer">
+            <div>
+              <h2 className="text-lg font-semibold text-graphite-100">Сторонние конфиги</h2>
+              <p className="text-graphite-500 text-sm mt-1">AmneziaWG и другие — только для страницы в браузере</p>
+            </div>
+            <button type="button" onClick={() => setEnableExtraConfigs(!enableExtraConfigs)} className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${enableExtraConfigs ? "bg-accent-500" : "bg-graphite-700"}`}>
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${enableExtraConfigs ? "translate-x-4" : ""}`} />
+            </button>
+          </label>
+          {enableExtraConfigs && (
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm text-graphite-400 mb-1.5">Общее название раздела</label>
+                <input value={extraConfigsTitle} onChange={(e) => setExtraConfigsTitle(e.target.value)} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/50" placeholder="Дополнительные конфиги" />
+              </div>
+              <div className="space-y-3">
+                {extraConfigs.map((cfg, idx) => (
+                  <div key={idx} className="flex gap-2 items-start">
+                    <div className="flex-1 space-y-2">
+                      <input value={cfg.name} onChange={(e) => { const n = [...extraConfigs]; n[idx] = {...n[idx], name: e.target.value}; setExtraConfigs(n); }} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50" placeholder="Название конфига" />
+                      <input value={cfg.key} onChange={(e) => { const n = [...extraConfigs]; n[idx] = {...n[idx], key: e.target.value}; setExtraConfigs(n); if (idx === extraConfigs.length - 1 && e.target.value.trim()) setExtraConfigs([...n, {name: "", key: ""}]); }} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono" placeholder="vpn://... или awg://..." />
+                    </div>
+                    {extraConfigs.length > 1 && cfg.key.trim() && (
+                      <button onClick={() => setExtraConfigs(extraConfigs.filter((_, i) => i !== idx))} className="mt-2.5 text-graphite-600 hover:text-red-400 transition-colors"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Logs */}

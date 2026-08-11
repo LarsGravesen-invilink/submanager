@@ -52,6 +52,11 @@ export default function CreateSubscriptionPage() {
   
   const [pageTitle, setPageTitle] = useState("");
   
+  // Extra configs (AmneziaWG, etc.)
+  const [enableExtraConfigs, setEnableExtraConfigs] = useState(false);
+  const [extraConfigsTitle, setExtraConfigsTitle] = useState("");
+  const [extraConfigs, setExtraConfigs] = useState<{name: string; key: string}[]>([{name: "", key: ""}]);
+
   // Client display settings
   const [showExpiry, setShowExpiry] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
@@ -313,6 +318,8 @@ export default function CreateSubscriptionPage() {
           totalTrafficGb,
           usedUploadGb,
           usedDownloadGb,
+          extraConfigsTitle: enableExtraConfigs ? extraConfigsTitle : "",
+          extraConfigs: enableExtraConfigs ? extraConfigs.filter(c => c.name.trim() && c.key.trim()) : [],
         }),
       });
 
@@ -509,6 +516,48 @@ export default function CreateSubscriptionPage() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        {/* Extra Configs (AmneziaWG, etc.) */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 animate-fade-in">
+          <label className="flex items-center justify-between cursor-pointer">
+            <div>
+              <h2 className="text-lg font-semibold text-graphite-100">Сторонние конфиги</h2>
+              <p className="text-graphite-500 text-sm mt-1">AmneziaWG, WireGuard и другие — только для страницы в браузере</p>
+            </div>
+            <button type="button" onClick={() => setEnableExtraConfigs(!enableExtraConfigs)} className={`w-10 h-6 rounded-full transition-colors flex items-center px-0.5 ${enableExtraConfigs ? "bg-accent-500" : "bg-graphite-700"}`}>
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${enableExtraConfigs ? "translate-x-4" : ""}`} />
+            </button>
+          </label>
+
+          {enableExtraConfigs && (
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm text-graphite-400 mb-1.5">Общее название раздела</label>
+                <input value={extraConfigsTitle} onChange={(e) => setExtraConfigsTitle(e.target.value)} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/50 transition-all" placeholder="Дополнительные конфиги" />
+              </div>
+
+              <div className="space-y-3">
+                {extraConfigs.map((cfg, idx) => (
+                  <div key={idx} className="flex gap-2 items-start">
+                    <div className="flex-1 space-y-2">
+                      <input value={cfg.name} onChange={(e) => { const n = [...extraConfigs]; n[idx] = {...n[idx], name: e.target.value}; setExtraConfigs(n); }} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50" placeholder="Название конфига" />
+                      <input value={cfg.key} onChange={(e) => {
+                        const n = [...extraConfigs]; n[idx] = {...n[idx], key: e.target.value}; setExtraConfigs(n);
+                        // Auto-add new row if last is filled
+                        if (idx === extraConfigs.length - 1 && e.target.value.trim()) setExtraConfigs([...n, {name: "", key: ""}]);
+                      }} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono" placeholder="vpn://... или awg://... или wg://..." />
+                    </div>
+                    {extraConfigs.length > 1 && cfg.key.trim() && (
+                      <button onClick={() => setExtraConfigs(extraConfigs.filter((_, i) => i !== idx))} className="mt-2.5 text-graphite-600 hover:text-red-400 transition-colors">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </section>

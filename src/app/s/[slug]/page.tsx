@@ -31,6 +31,8 @@ export default async function SubscriptionPublicPage({
       logoSize={sub.logoSize || "medium"}
       expiresAt={sub.expiresAt ? sub.expiresAt.toISOString() : null}
       isActive={sub.isActive}
+      extraConfigsTitle={sub.extraConfigsTitle || ""}
+      extraConfigs={(sub.extraConfigs as {name: string; key: string}[]) || []}
     />
   );
 }
