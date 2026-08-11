@@ -13,7 +13,7 @@
 ## ⚡ Установка одной командой
 
 ```bash
-bash <(curl -sL https://raw.githubusercontent.com/LarsGravesen-invilink/submanager/main/install.sh)
+bash <(curl -sL https://raw.githubusercontent.com/LarsGravesen/submanager/main/install.sh)
 ```
 
 ### Или вручную:
