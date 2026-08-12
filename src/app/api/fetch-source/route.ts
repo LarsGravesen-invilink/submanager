@@ -11,8 +11,12 @@ const USER_AGENTS = [
   "Hiddify/2.0.0",
   "v2rayNG/1.8.20",
   "clash-meta",
+  "clash-verge/1.0",
+  "ClashForWindows/0.20.0",
   "sing-box/1.8.0",
   "Streisand/1.6.0",
+  "NekoBox/1.0",
+  "Shadowrocket/2.0",
   "SubManager/1.0",
 ];
 
@@ -44,6 +48,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "URL обязателен" }, { status: 400 });
   }
 
+  // Try both schemes — some panels only listen on http (no SSL), some on https
+  const candidates: string[] = [url];
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:") {
+      parsed.protocol = "https:";
+      candidates.push(parsed.toString());
+    } else if (parsed.protocol === "https:") {
+      parsed.protocol = "http:";
+      candidates.push(parsed.toString());
+    }
+  } catch { /* keep original */ }
+
   let bestKeys: { value: string; name: string; fingerprint: string }[] = [];
   let lastError = "";
 
@@ -55,56 +72,60 @@ export async function POST(req: Request) {
   const triedFormats: string[] = [];
 
   for (const ua of USER_AGENTS) {
-    try {
-      const response = await fetch(url, {
-        headers: { "User-Agent": ua },
-        signal: AbortSignal.timeout(15000),
-      });
+    for (const tryUrl of candidates) {
+      try {
+        const response = await fetch(tryUrl, {
+          headers: { "User-Agent": ua },
+          redirect: "follow",
+          signal: AbortSignal.timeout(15000),
+        });
 
-      triedFormats.push(ua);
+        triedFormats.push(`${tryUrl} (${ua})`);
 
-      if (!response.ok) {
-        lastError = `HTTP ${response.status}`;
-        continue;
-      }
+        if (!response.ok) {
+          lastError = `HTTP ${response.status} (${tryUrl})`;
+          continue;
+        }
 
-      // Collect diagnostics from headers
-      if (header("x-hwid-not-supported", response.headers) === "true") {
-        sawHwidUnsupported = true;
-      }
-      if (header("x-hwid-limit", response.headers) === "true") {
-        sawHwidLimit = true;
-      }
-      if (header("x-hwid-max-devices-reached", response.headers) === "true") {
-        sawHwidMaxDevices = true;
-      }
-      if (header("providerid", response.headers)) {
-        sawProviderId = header("providerid", response.headers);
-      }
+        // Collect diagnostics from headers
+        if (header("x-hwid-not-supported", response.headers) === "true") {
+          sawHwidUnsupported = true;
+        }
+        if (header("x-hwid-limit", response.headers) === "true") {
+          sawHwidLimit = true;
+        }
+        if (header("x-hwid-max-devices-reached", response.headers) === "true") {
+          sawHwidMaxDevices = true;
+        }
+        if (header("providerid", response.headers)) {
+          sawProviderId = header("providerid", response.headers);
+        }
 
-      const content = await response.text();
-      if (!content.trim()) continue;
+        const content = await response.text();
+        if (!content.trim()) continue;
 
-      const keys = parseSubscriptionContent(content);
-      const realKeys = keys.filter(isRealKey);
+        const keys = parseSubscriptionContent(content);
+        const realKeys = keys.filter(isRealKey);
 
-      if (realKeys.length > 0) {
-        bestKeys = realKeys.map((k) => ({
-          value: k,
-          name: extractKeyName(k),
-          fingerprint: keyFingerprint(k),
-        }));
-        break;
+        if (realKeys.length > 0) {
+          bestKeys = realKeys.map((k) => ({
+            value: k,
+            name: extractKeyName(k),
+            fingerprint: keyFingerprint(k),
+          }));
+          break;
+        }
+
+        if (keys.length > 0 && realKeys.length === 0) {
+          sawDummyResponse = true;
+          lastError = `Сервер вернул заглушку вместо реальных конфигураций (${tryUrl}).`;
+          continue;
+        }
+      } catch (e) {
+        lastError = `${e instanceof Error ? e.message : "Ошибка загрузки"} (${tryUrl})`;
       }
-
-      if (keys.length > 0 && realKeys.length === 0) {
-        sawDummyResponse = true;
-        lastError = "Сервер вернул заглушку вместо реальных конфигураций.";
-        continue;
-      }
-    } catch (e) {
-      lastError = e instanceof Error ? e.message : "Ошибка загрузки";
     }
+    if (bestKeys.length > 0) break;
   }
 
   // Special diagnostic pass for Happ/HWID-protected sources

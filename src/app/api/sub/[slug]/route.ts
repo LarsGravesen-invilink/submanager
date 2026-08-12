@@ -5,7 +5,7 @@ import {
   subscriptionKeys,
   accessLogs,
 } from "@/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 function isLikelyBrowser(ua: string): boolean {
   const clientPatterns = [
@@ -161,7 +161,7 @@ export async function GET(
 
     // If no backup keys, add dummy so clients like Incy can parse the subscription
     if (lines.length === 0) {
-      lines.push(DUMMY_KEY + "#" + encodeURIComponent("🚫ИСТЁК СРОК🚫"));
+      lines.push(DUMMY_KEY + "#" + encodeURIComponent("ℹ️ПУСТОℹ️"));
     }
 
     const content = lines.join("\n");
@@ -182,7 +182,7 @@ export async function GET(
   if (isExpired) {
     if (isBrowser) return redirectToBrowserPage();
     // Dummy key with expiry name so clients like Incy can parse
-    const expiredContent = DUMMY_KEY + "#" + encodeURIComponent("🚫ИСТЁК СРОК🚫");
+    const expiredContent = DUMMY_KEY + "#" + encodeURIComponent("ℹ️ПУСТОℹ️");
     return new NextResponse(Buffer.from(expiredContent, "utf-8").toString("base64"), {
       status: 200,
       headers: {
@@ -202,7 +202,8 @@ export async function GET(
   const keys = await db
     .select()
     .from(subscriptionKeys)
-    .where(eq(subscriptionKeys.subscriptionId, sub.id));
+    .where(eq(subscriptionKeys.subscriptionId, sub.id))
+    .orderBy(asc(subscriptionKeys.sortOrder));
 
   const enabledKeys = keys.filter((k) => k.isEnabled);
 

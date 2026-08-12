@@ -51,6 +51,23 @@ interface SubData {
   logs: LogEntry[];
 }
 
+interface RemoteKey {
+  value: string;
+  name: string;
+  fingerprint: string;
+  customName: string;
+  selected: boolean;
+}
+
+interface RemoteSourceState {
+  id: string;
+  url: string;
+  status: "pending" | "ok" | "error";
+  keys: RemoteKey[];
+  showEditor: boolean;
+  error?: string;
+}
+
 export default function EditSubscriptionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [sub, setSub] = useState<SubData | null>(null);
@@ -85,6 +102,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [extraConfigs, setExtraConfigs] = useState<{name: string; key: string}[]>([{name: "", key: ""}]);
   const [newSourceUrl, setNewSourceUrl] = useState("");
   const [addingSource, setAddingSource] = useState(false);
+  const [newSources, setNewSources] = useState<RemoteSourceState[]>([]);
   const [keys, setKeys] = useState<SubKey[]>([]);
   const [showLogs, setShowLogs] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -147,49 +165,91 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   };
 
   const addSource = async () => {
-    if (!newSourceUrl.trim() || !sub) return;
+    const url = newSourceUrl.trim();
+    if (!url || !sub) return;
     setAddingSource(true);
+    const srcId = crypto.randomUUID();
+    setNewSources((prev) => [
+      ...prev,
+      { id: srcId, url, status: "pending", keys: [], showEditor: false },
+    ]);
+    setNewSourceUrl("");
     try {
       const res = await fetch("/api/fetch-source", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: newSourceUrl.trim() }),
+        body: JSON.stringify({ url }),
       });
       const data = await res.json();
       if (data.keys && data.keys.length > 0) {
-        // Save source and keys to subscription
-        await fetch(`/api/subscriptions/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sources: [
-              ...sub.sources,
-              { url: newSourceUrl.trim(), selectedKeys: data.keys.map((k: {fingerprint: string}) => k.fingerprint), keyNames: {}, lastStatus: "ok" },
-            ],
-          }),
-        });
-        // Add keys
-        for (const k of data.keys) {
-          await fetch(`/api/subscriptions/${id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              keys: [
-                ...keys.map(ek => ({ value: ek.keyValue, customName: ek.customName, sourceType: ek.sourceType, sourceUrl: ek.sourceUrl, isEnabled: ek.isEnabled })),
-                { value: k.value, customName: "", sourceType: "remote", sourceUrl: newSourceUrl.trim(), isEnabled: true },
-              ],
-            }),
-          });
-        }
-        setNewSourceUrl("");
-        loadSub();
+        setNewSources((prev) =>
+          prev.map((s) =>
+            s.id === srcId
+              ? {
+                  ...s,
+                  status: "ok",
+                  keys: data.keys.map((k: RemoteKey) => ({
+                    ...k,
+                    customName: "",
+                    selected: true,
+                  })),
+                }
+              : s
+          )
+        );
       } else {
-        setError(data.error || "Не удалось загрузить ключи из источника");
+        setNewSources((prev) =>
+          prev.map((s) =>
+            s.id === srcId ? { ...s, status: "error", error: data.error || "Не удалось загрузить ключи" } : s
+          )
+        );
       }
     } catch {
-      setError("Ошибка загрузки источника");
+      setNewSources((prev) =>
+        prev.map((s) => (s.id === srcId ? { ...s, status: "error", error: "Ошибка загрузки источника" } : s))
+      );
     }
     setAddingSource(false);
+  };
+
+  const removeNewSource = (id: string) => {
+    setNewSources((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const toggleSourceEditor = (id: string) => {
+    setNewSources((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, showEditor: !s.showEditor } : s))
+    );
+  };
+
+  const toggleKeySelection = (srcId: string, fp: string) => {
+    setNewSources((prev) =>
+      prev.map((s) =>
+        s.id === srcId
+          ? {
+              ...s,
+              keys: s.keys.map((k) =>
+                k.fingerprint === fp ? { ...k, selected: !k.selected } : k
+              ),
+            }
+          : s
+      )
+    );
+  };
+
+  const setKeyCustomName = (srcId: string, fp: string, name: string) => {
+    setNewSources((prev) =>
+      prev.map((s) =>
+        s.id === srcId
+          ? {
+              ...s,
+              keys: s.keys.map((k) =>
+                k.fingerprint === fp ? { ...k, customName: name } : k
+              ),
+            }
+          : s
+      )
+    );
   };
 
   const removeSource = async (sourceUrl: string) => {
@@ -215,8 +275,19 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
 
   const handleSave = async () => {
     if (!name.trim()) { setError("Название обязательно"); return; }
+    if (!sub) return;
     setError(""); setSaving(true);
     try {
+      const readyNewSources = newSources.filter((s) => s.status === "ok");
+      const newSourceKeys = readyNewSources.flatMap((s) =>
+        s.keys.filter((k) => k.selected).map((k) => ({
+          value: k.value,
+          customName: k.customName,
+          sourceType: "remote",
+          sourceUrl: s.url,
+          isEnabled: true,
+        }))
+      );
       const res = await fetch(`/api/subscriptions/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -227,7 +298,19 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           totalTrafficGb, usedUploadGb, usedDownloadGb,
           extraConfigsTitle: enableExtraConfigs ? extraConfigsTitle : "",
           extraConfigs: enableExtraConfigs ? extraConfigs.filter(c => c.name.trim() && c.key.trim()) : [],
-          keys: keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled })),
+          keys: [
+            ...keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled })),
+            ...newSourceKeys,
+          ],
+          sources: [
+            ...sub.sources.map((s) => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus })),
+            ...readyNewSources.map((s) => ({
+              url: s.url,
+              selectedKeys: s.keys.filter((k) => k.selected).map((k) => k.fingerprint),
+              keyNames: Object.fromEntries(s.keys.filter((k) => k.customName.trim()).map((k) => [k.fingerprint, k.customName])),
+              lastStatus: "ok",
+            })),
+          ],
         }),
       });
       if (res.ok) router.push("/dashboard");
@@ -338,8 +421,54 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
               ))}
             </div>
           )}
+          {newSources.length > 0 && (
+            <div className="space-y-3 mb-4">
+              <h3 className="text-sm font-medium text-graphite-300">Новые источники</h3>
+              {newSources.map((src) => (
+                <div key={src.id} className="bg-graphite-800/50 border border-graphite-700/50 rounded-xl p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 truncate font-mono text-sm text-graphite-300">{src.url}</div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {src.status === "pending" && (
+                        <div className="w-4 h-4 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
+                      )}
+                      {src.status === "ok" && (
+                        <span className="text-emerald-400 flex items-center gap-1 text-xs">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          {src.keys.filter(k => k.selected).length}/{src.keys.length}
+                        </span>
+                      )}
+                      {src.status === "error" && (
+                        <span className="text-red-400 flex items-center gap-1 text-xs">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                          Ошибка
+                        </span>
+                      )}
+                      {src.status === "ok" && (
+                        <button onClick={() => toggleSourceEditor(src.id)} className="px-2 py-1 text-xs bg-graphite-700 hover:bg-graphite-600 text-graphite-300 rounded-lg transition-colors">
+                          Выбрать ключи
+                        </button>
+                      )}
+                      <button onClick={() => removeNewSource(src.id)} className="text-graphite-600 hover:text-red-400 transition-colors">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  </div>
+                  {src.error && <p className="mt-2 text-xs text-red-400">{src.error}</p>}
+                  {src.showEditor && (
+                    <SourceEditorModal
+                      source={src}
+                      onToggleKey={(fp) => toggleKeySelection(src.id, fp)}
+                      onSetName={(fp, n) => setKeyCustomName(src.id, fp, n)}
+                      onClose={() => toggleSourceEditor(src.id)}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex gap-2">
-            <input value={newSourceUrl} onChange={(e) => setNewSourceUrl(e.target.value)} className="flex-1 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono" placeholder="https://... — ссылка на подписку" />
+            <input value={newSourceUrl} onChange={(e) => setNewSourceUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addSource(); }} className="flex-1 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono" placeholder="https://... — ссылка на подписку" />
             <button onClick={addSource} disabled={addingSource || !newSourceUrl.trim()} className="px-4 py-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium transition-all disabled:opacity-50 flex-shrink-0">
               {addingSource ? "..." : "+"}
             </button>
@@ -475,6 +604,81 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           </button>
         </div>
       </main>
+    </div>
+  );
+}
+
+function SourceEditorModal({
+  source,
+  onToggleKey,
+  onSetName,
+  onClose,
+}: {
+  source: RemoteSourceState;
+  onToggleKey: (fp: string) => void;
+  onSetName: (fp: string, name: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-graphite-900 border border-graphite-800 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-slide-up shadow-2xl">
+        <div className="p-6 border-b border-graphite-800">
+          <h3 className="text-lg font-semibold text-graphite-100">
+            Выбор ключей из источника
+          </h3>
+          <p className="text-graphite-500 text-sm mt-1 truncate">
+            {source.url}
+          </p>
+          <p className="text-graphite-400 text-xs mt-2">
+            Выбрано: {source.keys.filter(k => k.selected).length} из {source.keys.length}
+          </p>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+          {source.keys.map((key) => (
+            <div
+              key={key.fingerprint}
+              className={`flex items-start gap-3 rounded-xl p-3 transition-all ${
+                key.selected ? "bg-graphite-800/50" : "bg-graphite-800/20 opacity-50"
+              }`}
+            >
+              <label className="flex items-center mt-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={key.selected}
+                  onChange={() => onToggleKey(key.fingerprint)}
+                  className="w-4 h-4 rounded border-graphite-600 text-accent-500 bg-graphite-700 focus:ring-accent-500/50 cursor-pointer"
+                />
+              </label>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-graphite-300 truncate font-mono">
+                  {key.name || key.value.slice(0, 60) + "..."}
+                </p>
+                <input
+                  value={key.customName}
+                  onChange={(e) => onSetName(key.fingerprint, e.target.value)}
+                  className="mt-1.5 w-full bg-graphite-800 border border-graphite-700/50 rounded-lg px-3 py-1.5 text-sm text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30 transition-all"
+                  placeholder={key.name ? `Оригинальное: ${key.name}` : "Имя ключа в клиенте"}
+                />
+              </div>
+            </div>
+          ))}
+          {source.keys.length === 0 && (
+            <p className="text-graphite-500 text-center py-8">
+              Ключи не найдены
+            </p>
+          )}
+        </div>
+
+        <div className="p-6 border-t border-graphite-800 flex gap-3 justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white font-medium transition-all text-sm"
+          >
+            Готово
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
