@@ -1,15 +1,59 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { subscriptions, subscriptionKeys, remoteSources } from "@/db/schema";
+import { subscriptions, subscriptionKeys, remoteSources, settings } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  parseSubscriptionContent,
-  extractKeyName,
-  keyFingerprint,
-} from "@/lib/keys";
+import { parseSubscriptionContent, extractKeyName, keyFingerprint, isRealKey } from "@/lib/keys";
+import { rawFetch } from "@/lib/fetch";
+import { syncRemoteSourceKeys } from "@/lib/sourceSync";
+
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "v2rayNG/1.8.20",
+  "v2rayN/6.0",
+  "Nekoray/3.26",
+  "NekoBox/1.0",
+  "Karing/1.0",
+  "FlClash/0.8",
+  "Hiddify/2.0.0",
+  "ClashMeta/1.0",
+  "Clash.Meta/1.0",
+  "clash-meta",
+  "clash-verge/1.0",
+  "ClashVerge/1.0",
+  "ClashForWindows/0.20.0",
+  "sing-box/1.8.0",
+  "Streisand/1.6.0",
+  "Shadowrocket/2.0",
+  "Stash/1.0",
+  "Surge/5.0",
+  "Loon/3.0",
+  "Happ/4.7.0",
+  "SubManager/1.0",
+];
+
+async function getValidateKeys(): Promise<boolean> {
+  try {
+    const [row] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "smartKeyValidation"))
+      .limit(1);
+    if (!row) return true;
+    return row.value !== "false";
+  } catch {
+    return true;
+  }
+}
 
 export async function GET() {
   try {
+    const [validateRow] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "smartKeyValidation"))
+      .limit(1);
+    const validateKeys = validateRow ? validateRow.value !== "false" : true;
+
     const allSubs = await db.select().from(subscriptions);
 
     for (const sub of allSubs) {
@@ -22,12 +66,28 @@ export async function GET() {
 
       for (const source of sources) {
         try {
-          const response = await fetch(source.url, {
-            headers: { "User-Agent": "SubManager/1.0" },
-            signal: AbortSignal.timeout(15000),
-          });
+          let keys: string[] = [];
+          let ok = false;
 
-          if (!response.ok) {
+          for (const ua of USER_AGENTS) {
+            try {
+              const response = await rawFetch(source.url, ua, { timeoutMs: 15000 });
+              if (response.status < 200 || response.status >= 300) continue;
+              const content = response.body;
+              if (!content.trim()) continue;
+              const parsed = parseSubscriptionContent(content);
+              const real = parsed.filter(isRealKey);
+              if (real.length > 0) {
+                keys = real;
+                ok = true;
+                break;
+              }
+            } catch {
+              continue;
+            }
+          }
+
+          if (!ok || keys.length === 0) {
             await db
               .update(remoteSources)
               .set({ lastStatus: "error", lastFetchedAt: new Date() })
@@ -35,79 +95,7 @@ export async function GET() {
             continue;
           }
 
-          const content = await response.text();
-          const keys = parseSubscriptionContent(content);
-
-          // Delete old remote keys from this source
-          const existingKeys = await db
-            .select()
-            .from(subscriptionKeys)
-            .where(eq(subscriptionKeys.subscriptionId, sub.id));
-
-          const remoteKeysFromSource = existingKeys.filter(
-            (k) => k.sourceType === "remote" && k.sourceUrl === source.url
-          );
-
-          // Build set of new fingerprints
-          const newFps = new Set(keys.map((k) => keyFingerprint(k)));
-
-          // Remove keys that no longer exist
-          for (const old of remoteKeysFromSource) {
-            if (!newFps.has(old.keyFingerprint)) {
-              await db
-                .delete(subscriptionKeys)
-                .where(eq(subscriptionKeys.id, old.id));
-            }
-          }
-
-          // Add/update keys
-          const existingFps = new Set(
-            remoteKeysFromSource.map((k) => k.keyFingerprint)
-          );
-          const selectedKeys = (source.selectedKeys || []) as string[];
-          const keyNames = (source.keyNames || {}) as Record<string, string>;
-
-          for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            const fp = keyFingerprint(k);
-
-            // If selectedKeys is set and non-empty, only include selected
-            if (selectedKeys.length > 0 && !selectedKeys.includes(fp)) {
-              continue;
-            }
-
-            const origName = extractKeyName(k);
-            const customName = keyNames[fp] || "";
-
-            if (existingFps.has(fp)) {
-              // Update existing key value (might have changed params)
-              await db
-                .update(subscriptionKeys)
-                .set({
-                  keyValue: k,
-                  originalName: origName,
-                })
-                .where(eq(subscriptionKeys.keyFingerprint, fp));
-            } else {
-              // Add new key
-              await db.insert(subscriptionKeys).values({
-                subscriptionId: sub.id,
-                keyValue: k,
-                customName,
-                originalName: origName,
-                sourceType: "remote",
-                sourceUrl: source.url,
-                isEnabled: true,
-                sortOrder: i + 1000,
-                keyFingerprint: fp,
-              });
-            }
-          }
-
-          await db
-            .update(remoteSources)
-            .set({ lastStatus: "ok", lastFetchedAt: new Date() })
-            .where(eq(remoteSources.id, source.id));
+          await syncRemoteSourceKeys(sub.id, source, keys, { validateKeys });
         } catch {
           await db
             .update(remoteSources)

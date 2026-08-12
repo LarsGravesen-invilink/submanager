@@ -5,10 +5,26 @@ import {
   subscriptionKeys,
   remoteSources,
   accessLogs,
+  settings,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth";
 import { asc, eq } from "drizzle-orm";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
+import { filterAliveKeys } from "@/lib/keyHealth";
+
+async function getSmartValidation(): Promise<boolean> {
+  try {
+    const [row] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "smartKeyValidation"))
+      .limit(1);
+    if (!row) return false;
+    return row.value === "true";
+  } catch {
+    return false;
+  }
+}
 
 export async function GET(
   _req: NextRequest,
@@ -64,6 +80,8 @@ export async function PUT(
   const { id } = await params;
   const body = await req.json();
 
+  const validateKeys = await getSmartValidation();
+
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
   if (body.name !== undefined) updateData.name = body.name;
   if (body.title !== undefined) updateData.title = body.title;
@@ -101,8 +119,26 @@ export async function PUT(
       .delete(subscriptionKeys)
       .where(eq(subscriptionKeys.subscriptionId, id));
 
-    for (let i = 0; i < body.keys.length; i++) {
-      const k = body.keys[i];
+    // Remove fully identical keys (same value), keep the first occurrence
+    const seenValues = new Set<string>();
+    let dedupedKeys: typeof body.keys = [];
+    for (const k of body.keys) {
+      if (!k.value) continue;
+      const norm = k.value.trim();
+      if (seenValues.has(norm)) continue;
+      seenValues.add(norm);
+      dedupedKeys.push(k);
+    }
+
+    if (validateKeys && dedupedKeys.length > 0) {
+      const alive = new Set(
+        await filterAliveKeys(dedupedKeys.map((k: any) => k.value))
+      );
+      dedupedKeys = dedupedKeys.filter((k: any) => alive.has(k.value));
+    }
+
+    for (let i = 0; i < dedupedKeys.length; i++) {
+      const k = dedupedKeys[i];
       if (!k.value) continue;
       const fp = keyFingerprint(k.value);
       const origName = extractKeyName(k.value);

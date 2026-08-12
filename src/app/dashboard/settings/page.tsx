@@ -50,6 +50,8 @@ export default function SettingsPage() {
   const [customFontUrl, setCustomFontUrl] = useState("");
   const customFontRef = useRef<HTMLInputElement>(null);
 
+  const [smartKeyValidation, setSmartKeyValidation] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -83,6 +85,7 @@ export default function SettingsPage() {
         if (data.fontFamily) setFontFamily(data.fontFamily);
         if (data.customFontName) setCustomFontName(data.customFontName);
         if (data.customFontUrl) setCustomFontUrl(data.customFontUrl);
+        if (data.smartKeyValidation !== undefined) setSmartKeyValidation(data.smartKeyValidation === "true");
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -294,9 +297,10 @@ export default function SettingsPage() {
           accentColor,
           fontSize: String(fontSize),
           fontFamily,
-          customFontName,
-          customFontUrl,
-        }),
+           customFontName,
+           customFontUrl,
+           smartKeyValidation: smartKeyValidation ? "true" : "false",
+         }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -489,6 +493,35 @@ export default function SettingsPage() {
             <p className="text-graphite-400 text-xs mb-2">Предпросмотр:</p>
             <p className="text-graphite-100">Привет, мир! Hello, World! 🚀 Подписка активна</p>
           </div>
+        </section>
+
+        {/* Smart key validation */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6">
+          <h2 className="text-lg font-semibold text-graphite-100 mb-2">Проверка пинга и работоспособности ключей</h2>
+          <p className="text-graphite-500 text-sm mb-5">
+            Перед добавлением или редактированием подписки каждый подтянутый ключ проверяется на доступность
+            (пинг до сервера и порта). Недоступные и некорректные ключи автоматически отсеиваются и не попадают в подписку.
+            При выключенной проверке ключи добавляются как есть.
+          </p>
+          <button
+            onClick={() => setSmartKeyValidation((v) => !v)}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all ${
+              smartKeyValidation
+                ? "bg-accent-500/10 border-accent-500/30 text-accent-400"
+                : "bg-graphite-800 border-graphite-700 text-graphite-400"
+            }`}>
+            <span className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all ${
+              smartKeyValidation ? "bg-accent-500 border-accent-500 text-white" : "border-graphite-600"
+            }`}>
+              {smartKeyValidation && (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </span>
+            <span className="text-sm font-medium">Умная проверка ключей</span>
+            <span className="text-xs text-graphite-500 ml-auto">{smartKeyValidation ? "Включено" : "Выключено"}</span>
+          </button>
         </section>
 
         {/* Backup & Restore */}

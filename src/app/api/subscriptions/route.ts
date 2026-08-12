@@ -1,10 +1,25 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { subscriptions, subscriptionKeys, remoteSources } from "@/db/schema";
+import { subscriptions, subscriptionKeys, remoteSources, settings } from "@/db/schema";
 import { getSession } from "@/lib/auth";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
+import { filterAliveKeys } from "@/lib/keyHealth";
+
+async function getSmartValidation(): Promise<boolean> {
+  try {
+    const [row] = await db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, "smartKeyValidation"))
+      .limit(1);
+    if (!row) return false;
+    return row.value === "true";
+  } catch {
+    return false;
+  }
+}
 
 export async function GET() {
   const session = await getSession();
@@ -26,8 +41,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
+    try {
     const body = await req.json();
+    const validateKeys = await getSmartValidation();
     const {
       name,
       title,
@@ -49,6 +65,22 @@ export async function POST(req: Request) {
     }
 
     const slug = uuidv4().slice(0, 12);
+
+    let aliveSet: Set<string> | null = null;
+    if (validateKeys) {
+      const allVals: string[] = [];
+      if (keys && Array.isArray(keys)) {
+        for (const k of keys) if (k.value) allVals.push(k.value);
+      }
+      if (sources && Array.isArray(sources)) {
+        for (const s of sources) {
+          if (s.keys && Array.isArray(s.keys)) {
+            for (const k of s.keys) if (k.value) allVals.push(k.value);
+          }
+        }
+      }
+      aliveSet = new Set(await filterAliveKeys(allVals));
+    }
 
     const [sub] = await db
       .insert(subscriptions)
@@ -79,6 +111,7 @@ export async function POST(req: Request) {
       for (let i = 0; i < keys.length; i++) {
         const k = keys[i];
         if (!k.value) continue;
+        if (validateKeys && aliveSet && !aliveSet.has(k.value)) continue;
         const fp = keyFingerprint(k.value);
         const origName = extractKeyName(k.value);
         await db.insert(subscriptionKeys).values({
@@ -111,6 +144,7 @@ export async function POST(req: Request) {
           for (let i = 0; i < src.keys.length; i++) {
             const k = src.keys[i];
             if (!k.value) continue;
+            if (validateKeys && aliveSet && !aliveSet.has(k.value)) continue;
             const fp = keyFingerprint(k.value);
             const origName = extractKeyName(k.value);
             if (

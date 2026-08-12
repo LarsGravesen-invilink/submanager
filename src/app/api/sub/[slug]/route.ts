@@ -207,7 +207,18 @@ export async function GET(
 
   const enabledKeys = keys.filter((k) => k.isEnabled);
 
-  const keyLines = enabledKeys.map((k) => {
+  // Remove fully identical keys (same value), keep the first occurrence.
+  // Names may differ — we only dedupe by the actual key value.
+  const seenValues = new Set<string>();
+  const dedupedKeys: typeof enabledKeys = [];
+  for (const k of enabledKeys) {
+    const norm = k.keyValue.trim();
+    if (seenValues.has(norm)) continue;
+    seenValues.add(norm);
+    dedupedKeys.push(k);
+  }
+
+  const keyLines = dedupedKeys.map((k) => {
     const displayName = k.customName || k.originalName || "";
     if (displayName) {
       return setKeyNameForClient(k.keyValue, displayName);

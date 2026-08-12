@@ -95,6 +95,74 @@ export function keyFingerprint(key: string): string {
     .slice(0, 16);
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isRealKey(key: string): boolean {
+  const dummyPatterns = [
+    "0.0.0.0:1",
+    "00000000-0000-0000-0000-000000000000",
+    "127.0.0.1:1",
+    "не поддерживается",
+    "not supported",
+    "данное приложение",
+  ];
+  const lower = key.toLowerCase();
+  return !dummyPatterns.some((p) => lower.includes(p));
+}
+
+/**
+ * Smart & accurate validation of a VPN key.
+ * Checks that the protocol is supported and that the structurally required
+ * fields (UUID / password / host:port) are present and well-formed.
+ * Returns true only for keys that look genuinely usable.
+ */
+export function validateVpnKey(key: string): boolean {
+  const trimmed = key.trim();
+  if (!isVpnKey(trimmed)) return false;
+
+  try {
+    if (trimmed.startsWith("vmess://")) {
+      const json = JSON.parse(
+        Buffer.from(trimmed.slice(8), "base64").toString("utf-8")
+      );
+      if (!json || json.v !== "2") return false;
+      if (!json.add || !json.port || !json.id) return false;
+      if (!UUID_RE.test(String(json.id))) return false;
+      return true;
+    }
+
+    const hashIdx = trimmed.lastIndexOf("#");
+    const body = (
+      hashIdx !== -1 ? trimmed.slice(0, hashIdx) : trimmed
+    ).replace(/^[\w-]+:\/\//, "");
+
+    const atIdx = body.indexOf("@");
+    if (atIdx === -1) return false;
+    const userinfo = body.slice(0, atIdx);
+    const rest = body.slice(atIdx + 1);
+
+    const colonPort = rest.lastIndexOf(":");
+    if (colonPort === -1) return false;
+    const portStr = rest.slice(colonPort + 1).split("?")[0];
+    const port = parseInt(portStr, 10);
+    if (!port || port <= 0 || port > 65535) return false;
+
+    if (trimmed.startsWith("vless://")) {
+      const uuid = userinfo.split(":")[0];
+      if (!UUID_RE.test(uuid)) return false;
+    } else if (trimmed.startsWith("trojan://")) {
+      if (!userinfo) return false;
+    } else if (trimmed.startsWith("ss://")) {
+      if (!userinfo) return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function setKeyName(key: string, name: string): string {
   const trimmed = key.trim();
 
