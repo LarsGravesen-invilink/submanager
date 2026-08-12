@@ -274,6 +274,18 @@ export default function CreateSubscriptionPage() {
     }
     setError("");
     setSaving(true);
+    const pendingSources = remoteSources.filter((s) => s.status === "pending");
+    if (pendingSources.length > 0) {
+      setError("Источники ещё загружаются — подождите, пока они загрузятся, или удалите их");
+      setSaving(false);
+      return;
+    }
+    const errorSources = remoteSources.filter((s) => s.status === "error");
+    if (errorSources.length > 0) {
+      setError("Некоторые источники не загрузились — удалите их или исправьте ссылку");
+      setSaving(false);
+      return;
+    }
 
     const manualKeys = entries
       .filter((e) => e.value.trim() && e.type === "key")

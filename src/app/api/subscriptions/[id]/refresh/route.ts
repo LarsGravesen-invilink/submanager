@@ -10,12 +10,27 @@ import {
 } from "@/lib/keys";
 
 const USER_AGENTS = [
-  "Happ/4.7.0",
-  "Hiddify/2.0.0",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "v2rayNG/1.8.20",
+  "v2rayN/6.0",
+  "Nekoray/3.26",
+  "NekoBox/1.0",
+  "Karing/1.0",
+  "FlClash/0.8",
+  "Hiddify/2.0.0",
+  "ClashMeta/1.0",
+  "Clash.Meta/1.0",
   "clash-meta",
+  "clash-verge/1.0",
+  "ClashVerge/1.0",
+  "ClashForWindows/0.20.0",
   "sing-box/1.8.0",
   "Streisand/1.6.0",
+  "Shadowrocket/2.0",
+  "Stash/1.0",
+  "Surge/5.0",
+  "Loon/3.0",
+  "Happ/4.7.0",
   "SubManager/1.0",
 ];
 

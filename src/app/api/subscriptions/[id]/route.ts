@@ -7,7 +7,7 @@ import {
   accessLogs,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
 
 export async function GET(
@@ -34,7 +34,8 @@ export async function GET(
   const keys = await db
     .select()
     .from(subscriptionKeys)
-    .where(eq(subscriptionKeys.subscriptionId, id));
+    .where(eq(subscriptionKeys.subscriptionId, id))
+    .orderBy(asc(subscriptionKeys.sortOrder));
 
   const sources = await db
     .select()

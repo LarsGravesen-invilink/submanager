@@ -101,6 +101,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [extraConfigsTitle, setExtraConfigsTitle] = useState("");
   const [extraConfigs, setExtraConfigs] = useState<{name: string; key: string}[]>([{name: "", key: ""}]);
   const [newSourceUrl, setNewSourceUrl] = useState("");
+  const [newKeyInput, setNewKeyInput] = useState("");
   const [addingSource, setAddingSource] = useState(false);
   const [newSources, setNewSources] = useState<RemoteSourceState[]>([]);
   const [keys, setKeys] = useState<SubKey[]>([]);
@@ -164,8 +165,64 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     reader.readAsDataURL(file);
   };
 
-  const addSource = async () => {
-    const url = newSourceUrl.trim();
+  const detectType = (val: string): "key" | "subscription_url" | "unknown" | "" => {
+    if (!val.trim()) return "";
+    const protocols = ["vless://", "vmess://", "trojan://", "ss://", "ssr://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "wg://", "wireguard://"];
+    if (protocols.some((p) => val.trim().startsWith(p))) return "key";
+    try {
+      const url = new URL(val.trim());
+      if (url.protocol === "http:" || url.protocol === "https:") return "subscription_url";
+    } catch { /* not url */ }
+    return "unknown";
+  };
+
+  const addManualKey = () => {
+    const value = newKeyInput.trim();
+    if (!value) return;
+    const type = detectType(value);
+    if (type === "key") {
+      setKeys((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          keyValue: value,
+          customName: "",
+          originalName: "",
+          sourceType: "manual",
+          sourceUrl: "",
+          isEnabled: true,
+          keyFingerprint: "",
+        },
+      ]);
+      setNewKeyInput("");
+    } else if (type === "subscription_url") {
+      setNewKeyInput("");
+      addSource(value);
+    } else {
+      setError("Не удалось распознать ключ или ссылку на подписку");
+    }
+  };
+
+  const handleKeyInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addManualKey();
+    }
+  };
+
+  const moveKey = (index: number, dir: -1 | 1) => {
+    setKeys((prev) => {
+      const target = index + dir;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      const [item] = next.splice(index, 1);
+      next.splice(target, 0, item);
+      return next;
+    });
+  };
+
+  const addSource = async (urlOverride?: string) => {
+    const url = (urlOverride ?? newSourceUrl).trim();
     if (!url || !sub) return;
     setAddingSource(true);
     const srcId = crypto.randomUUID();
@@ -277,6 +334,18 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     if (!name.trim()) { setError("Название обязательно"); return; }
     if (!sub) return;
     setError(""); setSaving(true);
+    const pendingSources = newSources.filter((s) => s.status === "pending");
+    if (pendingSources.length > 0) {
+      setError("Источники ещё загружаются — подождите, пока они загрузятся, или удалите их");
+      setSaving(false);
+      return;
+    }
+    const errorSources = newSources.filter((s) => s.status === "error");
+    if (errorSources.length > 0) {
+      setError("Некоторые источники не загрузились — удалите их или исправьте ссылку");
+      setSaving(false);
+      return;
+    }
     try {
       const readyNewSources = newSources.filter((s) => s.status === "ok");
       const newSourceKeys = readyNewSources.flatMap((s) =>
@@ -374,14 +443,39 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
         {/* Keys — mobile-friendly */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
           <h2 className="text-lg font-semibold text-graphite-100 mb-4">Ключи ({keys.length})</h2>
+          <p className="text-graphite-500 text-sm mb-4">Вставьте ключ vless://, vmess://, trojan://, ss:// и др. или ссылку на подписку (https://). Порядок в этом списке — порядок отображения в клиентах.</p>
+          <div className="flex gap-2 mb-4">
+            <div className="flex-1 relative">
+              <input value={newKeyInput} onChange={(e) => setNewKeyInput(e.target.value)} onKeyDown={handleKeyInputKeyDown}
+                className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono pr-24"
+                placeholder="vless://..., vmess://..., https://..." />
+              {detectType(newKeyInput) === "key" && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20">Ключ</span>
+              )}
+              {detectType(newKeyInput) === "subscription_url" && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20">Источник</span>
+              )}
+            </div>
+            <button onClick={addManualKey} disabled={!newKeyInput.trim()} className="px-4 py-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium transition-all disabled:opacity-50 flex-shrink-0">
+              Добавить
+            </button>
+          </div>
           <div className="space-y-3">
-            {keys.map((key) => (
+            {keys.map((key, idx) => (
               <div key={key.id} className={`rounded-xl p-3 transition-all ${key.isEnabled ? "bg-graphite-800/50" : "bg-graphite-800/20 opacity-50"}`}>
                 <div className="flex items-center gap-3">
                   <button onClick={() => setKeys((p) => p.map((k) => k.id === key.id ? { ...k, isEnabled: !k.isEnabled } : k))}
                     className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${key.isEnabled ? "bg-accent-500 border-accent-500 text-white" : "border-graphite-600 bg-graphite-700"}`}>
                     {key.isEnabled && <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                   </button>
+                  <div className="flex flex-col flex-shrink-0">
+                    <button onClick={() => moveKey(idx, -1)} disabled={idx === 0} className="text-graphite-500 hover:text-graphite-200 disabled:opacity-30 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                    </button>
+                    <button onClick={() => moveKey(idx, 1)} disabled={idx === keys.length - 1} className="text-graphite-500 hover:text-graphite-200 disabled:opacity-30 transition-colors">
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-graphite-200 truncate">{key.customName || key.originalName || key.keyValue.slice(0, 50)}</p>
                     <p className="text-xs text-graphite-500 truncate">{key.sourceType === "remote" ? `Источник: ${key.sourceUrl}` : "Вручную"}</p>
@@ -469,7 +563,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           )}
           <div className="flex gap-2">
             <input value={newSourceUrl} onChange={(e) => setNewSourceUrl(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addSource(); }} className="flex-1 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono" placeholder="https://... — ссылка на подписку" />
-            <button onClick={addSource} disabled={addingSource || !newSourceUrl.trim()} className="px-4 py-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium transition-all disabled:opacity-50 flex-shrink-0">
+            <button onClick={() => addSource()} disabled={addingSource || !newSourceUrl.trim()} className="px-4 py-2.5 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium transition-all disabled:opacity-50 flex-shrink-0">
               {addingSource ? "..." : "+"}
             </button>
           </div>
