@@ -216,7 +216,7 @@ export default function SubPageClient({
   }
 
   return (
-    <div className="min-h-dvh bg-[#0B0B0E] text-white flex items-center justify-center px-4 py-12 relative overflow-hidden">
+    <div className="min-h-dvh bg-[#0B0B0E] text-white flex flex-col items-center justify-start px-4 pt-8 pb-10 sm:pt-12 md:justify-center md:py-12 relative overflow-hidden">
       {/* ===== Beeline sphere glow ===== */}
       <div
         className="b-sphere pointer-events-none absolute -top-44 -right-36 w-[560px] h-[560px] rounded-full"
@@ -304,31 +304,21 @@ export default function SubPageClient({
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button
               onClick={() => setShowClients(true)}
-              className="btn-beeline flex items-center justify-between gap-2 rounded-xl border border-white/12 bg-white/[0.04] hover:border-[#F0B900]/50 hover:bg-[#F0B900]/[0.06] px-4 py-3 text-sm font-bold transition-colors"
+              className="group flex items-center justify-center gap-2.5 rounded-xl border border-white/12 bg-white/[0.04] hover:border-[#F0B900]/50 hover:bg-[#F0B900]/[0.06] px-4 py-3 text-sm font-bold text-white/90 transition-colors"
             >
-              <span className="btn-inner text-left">
-                <span className="btn-copy max-w-[130px] truncate">Добавить в клиент</span>
-                <span className="btn-copy max-w-[130px] truncate" aria-hidden="true">Добавить в клиент</span>
-              </span>
-              <span className="btn-arr flex-shrink-0">
-                <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-              </span>
+              <span className="truncate">Добавить в клиент</span>
+              <svg className="w-4 h-4 text-[#F0B900] flex-shrink-0 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
             </button>
             <button
               onClick={generateQr}
-              className="btn-beeline flex items-center justify-between gap-2 rounded-xl border border-white/12 bg-white/[0.04] hover:border-[#F0B900]/50 hover:bg-[#F0B900]/[0.06] px-4 py-3 text-sm font-bold transition-colors"
+              className="group flex items-center justify-center gap-2.5 rounded-xl border border-white/12 bg-white/[0.04] hover:border-[#F0B900]/50 hover:bg-[#F0B900]/[0.06] px-4 py-3 text-sm font-bold text-white/90 transition-colors"
             >
-              <span className="btn-inner text-left">
-                <span className="btn-copy max-w-[90px] truncate">QR-код</span>
-                <span className="btn-copy max-w-[90px] truncate" aria-hidden="true">QR-код</span>
-              </span>
-              <span className="btn-arr flex-shrink-0">
-                <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-              </span>
+              <span className="truncate">QR-код</span>
+              <svg className="w-4 h-4 text-[#F0B900] flex-shrink-0 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
             </button>
           </div>
         </div>
@@ -387,17 +377,12 @@ export default function SubPageClient({
             )}
             <button
               onClick={() => setShowQr(false)}
-              className="btn-beeline w-full flex items-center justify-between rounded-xl bg-[#F0B900] hover:bg-[#E0A700] text-[#0B0B0E] px-4 py-3 font-bold transition-colors"
+              className="group w-full flex items-center justify-center gap-2.5 rounded-xl bg-[#F0B900] hover:bg-[#E0A700] text-[#0B0B0E] px-4 py-3 font-bold transition-colors"
             >
-              <span className="btn-inner text-left">
-                <span className="btn-copy">Закрыть</span>
-                <span className="btn-copy" aria-hidden="true">Закрыть</span>
-              </span>
-              <span className="btn-arr flex-shrink-0">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-              </span>
+              <span>Закрыть</span>
+              <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
             </button>
           </div>
         </div>
