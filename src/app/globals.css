@@ -90,6 +90,11 @@ body {
   to { transform: translateX(-50%); }
 }
 
+@keyframes bMarqueeRev {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+
 @keyframes bFlickerDot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.8); }
@@ -120,6 +125,12 @@ body {
   display: inline-flex;
   white-space: nowrap;
   animation: bMarquee 16s linear infinite;
+}
+
+.b-marquee-rev {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: bMarqueeRev 16s linear infinite;
 }
 
 /* Beeline arrow button — label scrolls up on hover, arrow slides right */
@@ -158,7 +169,8 @@ body {
   .b-glitch,
   .b-sphere,
   .b-flicker-dot,
-  .b-marquee {
+  .b-marquee,
+  .b-marquee-rev {
     animation: none !important;
   }
   .b-anim {

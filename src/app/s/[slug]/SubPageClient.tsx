@@ -216,14 +216,34 @@ export default function SubPageClient({
   }
 
   return (
-    <div className="min-h-dvh bg-[#0B0B0E] text-white flex flex-col items-center justify-start px-4 pt-8 pb-10 sm:pt-12 md:justify-center md:py-12 relative overflow-hidden">
-      {/* ===== Beeline sphere glow ===== */}
+    <div className="min-h-dvh bg-[#0B0B0E] text-white flex flex-col relative overflow-hidden">
+      {/* ===== Fixed scrolling stripes (top / bottom) ===== */}
+      <div className="fixed top-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] py-2 overflow-hidden select-none">
+        <div className="b-marquee text-[11px] font-semibold tracking-[0.4em] text-[#8f7400]/80">
+          <span className="pr-24">invilink vpn subsribe link</span>
+          <span className="pr-24">invilink vpn subsribe link</span>
+          <span className="pr-24">invilink vpn subsribe link</span>
+          <span className="pr-24">invilink vpn subsribe link</span>
+        </div>
+      </div>
+      <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] py-2 overflow-hidden select-none">
+        <div className="b-marquee-rev text-[11px] font-semibold tracking-[0.4em] text-[#8f7400]/80">
+          <span className="pr-24">invilink vpn subsribe link</span>
+          <span className="pr-24">invilink vpn subsribe link</span>
+          <span className="pr-24">invilink vpn subsribe link</span>
+          <span className="pr-24">invilink vpn subsribe link</span>
+        </div>
+      </div>
+
+      {/* ===== Beeline sphere glow (bottom) ===== */}
       <div
-        className="b-sphere pointer-events-none absolute -top-44 -right-36 w-[560px] h-[560px] rounded-full"
+        className="b-sphere pointer-events-none absolute -bottom-44 -right-36 w-[560px] h-[560px] rounded-full"
         style={{ background: "radial-gradient(circle at center, rgba(240,185,0,0.14), transparent 62%)" }}
       />
 
-      <div className="w-full max-w-md b-anim">
+      {/* ===== Content (between top and center) ===== */}
+      <div className="flex-1 flex flex-col items-center px-4 pt-12 pb-24">
+        <div className="w-full max-w-md my-auto b-anim">
         {/* Logo */}
         {logoUrl && (
           <div className="text-center mb-6">
@@ -356,6 +376,7 @@ export default function SubPageClient({
         <p className="text-center text-graphite-700 text-xs mt-8">
           SubManager by LarsGravesen
         </p>
+      </div>
       </div>
 
       {/* QR Code Modal */}
