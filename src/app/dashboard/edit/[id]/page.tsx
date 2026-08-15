@@ -105,6 +105,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [addingSource, setAddingSource] = useState(false);
   const [newSources, setNewSources] = useState<RemoteSourceState[]>([]);
   const [keys, setKeys] = useState<SubKey[]>([]);
+  const [keysExpanded, setKeysExpanded] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -460,7 +461,17 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
               Добавить
             </button>
           </div>
-          <div className="space-y-3">
+          {keys.length > 10 && (
+            <button
+              type="button"
+              onClick={() => setKeysExpanded((v) => !v)}
+              className="mb-3 flex items-center gap-2 px-4 py-2 rounded-xl bg-graphite-800 hover:bg-graphite-700 border border-graphite-700 text-sm text-graphite-200 transition-all"
+            >
+              <svg className={`w-4 h-4 transition-transform ${keysExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              {keysExpanded ? "Свернуть список ключей" : `Показать все ключи (${keys.length})`}
+            </button>
+          )}
+          <div className="space-y-3" style={keys.length > 10 && !keysExpanded ? { display: "none" } : undefined}>
             {keys.map((key, idx) => (
               <div key={key.id} className={`rounded-xl p-3 transition-all ${key.isEnabled ? "bg-graphite-800/50" : "bg-graphite-800/20 opacity-50"}`}>
                 <div className="flex items-center gap-3">

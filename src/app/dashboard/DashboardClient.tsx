@@ -73,20 +73,18 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
 
   const handlePauseClick = async (sub: Subscription) => {
     if (!sub.isActive) {
-      // Resume — clear pause data, keep existing keys untouched
+      // Resume — restore the exact pre-pause state.
+      // Keys and all their settings (custom names, order, enabled) are
+      // left completely untouched; regular scheduled auto-update keeps
+      // running on its own via cron.
       await fetch(`/api/subscriptions/${sub.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: true, pauseReason: "", backupKeys: [] }),
       });
-      setPauseMsg("Подписка возобновлена. Обновление ключей через 15 сек...");
+      setPauseMsg("Подписка возобновлена");
       setTimeout(() => setPauseMsg(""), 5000);
       loadSubs();
-      // Auto-refresh sources after 15 seconds
-      setTimeout(async () => {
-        await fetch(`/api/subscriptions/${sub.id}/refresh`, { method: "POST" });
-        loadSubs();
-      }, 15000);
       return;
     }
     // Show pause modal

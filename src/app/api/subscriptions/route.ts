@@ -129,6 +129,7 @@ export async function POST(req: Request) {
 
     // Insert remote sources
     if (sources && Array.isArray(sources)) {
+      const insertedFp = new Set<string>();
       for (const src of sources) {
         if (!src.url) continue;
         await db.insert(remoteSources).values({
@@ -146,6 +147,8 @@ export async function POST(req: Request) {
             if (!k.value) continue;
             if (validateKeys && aliveSet && !aliveSet.has(k.value)) continue;
             const fp = keyFingerprint(k.value);
+            if (insertedFp.has(fp)) continue;
+            insertedFp.add(fp);
             const origName = extractKeyName(k.value);
             if (
               src.selectedKeys &&

@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { subscriptions, subscriptionKeys, remoteSources, settings } from "@/db/schema";
+import { subscriptions, remoteSources, settings } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { parseSubscriptionContent, extractKeyName, keyFingerprint, isRealKey } from "@/lib/keys";
+import { parseSubscriptionContent, isRealKey } from "@/lib/keys";
 import { rawFetch } from "@/lib/fetch";
-import { syncRemoteSourceKeys } from "@/lib/sourceSync";
+import { syncSubscriptionKeys, FetchedSource } from "@/lib/sourceSync";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -64,6 +64,8 @@ export async function GET() {
         .from(remoteSources)
         .where(eq(remoteSources.subscriptionId, sub.id));
 
+      const fetched: FetchedSource[] = [];
+
       for (const source of sources) {
         try {
           let keys: string[] = [];
@@ -95,12 +97,20 @@ export async function GET() {
             continue;
           }
 
-          await syncRemoteSourceKeys(sub.id, source, keys, { validateKeys });
+          fetched.push({ id: source.id, url: source.url, keys, keyNames: source.keyNames });
         } catch {
           await db
             .update(remoteSources)
             .set({ lastStatus: "error", lastFetchedAt: new Date() })
             .where(eq(remoteSources.id, source.id));
+        }
+      }
+
+      if (fetched.length) {
+        try {
+          await syncSubscriptionKeys(sub.id, fetched, { validateKeys });
+        } catch (e) {
+          console.error("Sync error for subscription", sub.id, e);
         }
       }
     }

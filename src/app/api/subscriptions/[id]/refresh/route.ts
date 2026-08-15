@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { parseSubscriptionContent, isRealKey } from "@/lib/keys";
 import { rawFetch } from "@/lib/fetch";
-import { syncRemoteSourceKeys } from "@/lib/sourceSync";
+import { syncSubscriptionKeys, FetchedSource } from "@/lib/sourceSync";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -75,6 +75,8 @@ export async function POST(
   const validateKeys = await getValidateKeys();
   let totalRefreshed = 0;
 
+  const fetched: FetchedSource[] = [];
+
   for (const source of sources) {
     let keys: string[] = [];
     let ok = false;
@@ -105,8 +107,12 @@ export async function POST(
       continue;
     }
 
-    const r = await syncRemoteSourceKeys(id, source, keys, { validateKeys });
-    totalRefreshed += r.added + r.updated;
+    fetched.push({ id: source.id, url: source.url, keys, keyNames: source.keyNames });
+  }
+
+  if (fetched.length) {
+    const r = await syncSubscriptionKeys(id, fetched, { validateKeys });
+    totalRefreshed += r.added + r.updated + r.excluded;
   }
 
   return NextResponse.json({ success: true, refreshed: totalRefreshed });
