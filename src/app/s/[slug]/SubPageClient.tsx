@@ -216,34 +216,34 @@ export default function SubPageClient({
   }
 
   return (
-    <div className="min-h-dvh bg-[#0B0B0E] text-white flex flex-col relative overflow-hidden">
+    <div className="min-h-svh bg-[#0B0B0E] text-white flex flex-col relative overflow-hidden">
       {/* ===== Fixed scrolling stripes (top / bottom) ===== */}
-      <div className="fixed top-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] py-2 overflow-hidden select-none">
-        <div className="b-marquee text-[11px] font-semibold tracking-[0.4em] text-[#8f7400]/80">
-          <span className="pr-24">invilink vpn subsribe link</span>
-          <span className="pr-24">invilink vpn subsribe link</span>
-          <span className="pr-24">invilink vpn subsribe link</span>
-          <span className="pr-24">invilink vpn subsribe link</span>
+      <div className="fixed top-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] overflow-hidden select-none pt-[max(env(safe-area-inset-top),8px)] pb-2">
+        <div className="b-marquee text-[9px] font-medium tracking-[0.2em]">
+          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Управление подпиской для Вашего VPN клиента |</span>
+          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Управление подпиской для Вашего VPN клиента |</span>
+          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Управление подпиской для Вашего VPN клиента |</span>
+          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Управление подпиской для Вашего VPN клиента |</span>
         </div>
       </div>
-      <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] py-2 overflow-hidden select-none">
-        <div className="b-marquee-rev text-[11px] font-semibold tracking-[0.4em] text-[#8f7400]/80">
-          <span className="pr-24">invilink vpn subsribe link</span>
-          <span className="pr-24">invilink vpn subsribe link</span>
-          <span className="pr-24">invilink vpn subsribe link</span>
-          <span className="pr-24">invilink vpn subsribe link</span>
+      <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] overflow-hidden select-none pt-2 pb-[max(env(safe-area-inset-bottom),8px)]">
+        <div className="b-marquee-rev text-[9px] font-medium tracking-[0.2em]">
+          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Управление подпиской для Вашего VPN клиента |</span>
+          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Управление подпиской для Вашего VPN клиента |</span>
+          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Управление подпиской для Вашего VPN клиента |</span>
+          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Управление подпиской для Вашего VPN клиента |</span>
         </div>
       </div>
-
-      {/* ===== Beeline sphere glow (bottom) ===== */}
-      <div
-        className="b-sphere pointer-events-none absolute -bottom-44 -right-36 w-[560px] h-[560px] rounded-full"
-        style={{ background: "radial-gradient(circle at center, rgba(240,185,0,0.14), transparent 62%)" }}
-      />
 
       {/* ===== Content (between top and center) ===== */}
-      <div className="flex-1 flex flex-col items-center px-4 pt-12 pb-24">
-        <div className="w-full max-w-md my-auto b-anim">
+      <div className="relative flex-1 flex flex-col items-center px-4 pt-12 pb-24">
+        <div className="relative isolate w-full max-w-md my-auto">
+          {/* ===== Yellow glow under the content ===== */}
+          <div
+            className="pointer-events-none absolute left-1/2 -translate-x-1/2 -bottom-24 w-[560px] h-[320px] rounded-full -z-10"
+            style={{ background: "radial-gradient(ellipse at 50% 80%, rgba(240,185,0,0.2), transparent 70%)" }}
+          />
+          <div className="relative b-anim">
         {/* Logo */}
         {logoUrl && (
           <div className="text-center mb-6">
@@ -376,6 +376,7 @@ export default function SubPageClient({
         <p className="text-center text-graphite-700 text-xs mt-8">
           SubManager by LarsGravesen
         </p>
+      </div>
       </div>
       </div>
 
