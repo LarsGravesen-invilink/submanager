@@ -163,15 +163,19 @@ export default function SubPageClient({
   // Paused subscription
   if (!isActive) {
     return (
-      <div className="min-h-screen bg-graphite-950 flex items-center justify-center px-4">
-        <div className="text-center animate-fade-in">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-yellow-500/10 border-2 border-yellow-500/30 flex items-center justify-center">
-            <svg className="w-10 h-10 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <div className="min-h-dvh bg-[#0B0B0E] text-white flex items-center justify-center px-4 relative overflow-hidden">
+        <div
+          className="b-sphere pointer-events-none absolute -top-40 -right-28 w-[480px] h-[480px] rounded-full"
+          style={{ background: "radial-gradient(circle at center, rgba(240,185,0,0.16), transparent 62%)" }}
+        />
+        <div className="text-center b-anim">
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[#F0B900]/10 border-2 border-[#F0B900]/30 flex items-center justify-center">
+            <svg className="w-10 h-10 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-graphite-200 mb-2">
-            Подписка приостановлена
+          <h1 className="text-2xl font-bold text-graphite-100 mb-2">
+            <span className="b-glitch">Подписка приостановлена</span>
           </h1>
           <p className="text-graphite-500 text-sm">
             Свяжитесь с администратором для возобновления
@@ -184,20 +188,24 @@ export default function SubPageClient({
   // Expired subscription
   if (isExpired) {
     return (
-      <div className="min-h-screen bg-graphite-950 flex items-center justify-center px-4">
-        <div className="text-center animate-fade-in max-w-md">
+      <div className="min-h-dvh bg-[#0B0B0E] text-white flex items-center justify-center px-4 relative overflow-hidden">
+        <div
+          className="b-sphere pointer-events-none absolute -top-40 -right-28 w-[480px] h-[480px] rounded-full"
+          style={{ background: "radial-gradient(circle at center, rgba(248,113,113,0.14), transparent 62%)" }}
+        />
+        <div className="text-center b-anim max-w-md">
           <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center">
             <svg className="w-14 h-14 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-red-400 mb-3">
-            Истёк срок использования подписки
+            <span className="b-glitch">Истёк срок использования подписки</span>
           </h1>
           <p className="text-graphite-400 text-sm leading-relaxed">
             Для продления обратитесь к владельцу сервиса
           </p>
-          <div className="mt-6 px-4 py-3 bg-graphite-900 border border-graphite-800 rounded-xl">
+          <div className="mt-6 px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
             <p className="text-graphite-500 text-xs">
               Срок действия истёк: {new Date(expiresAt!).toLocaleString("ru-RU")}
             </p>
@@ -208,8 +216,14 @@ export default function SubPageClient({
   }
 
   return (
-    <div className="min-h-screen bg-graphite-950 flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md animate-slide-up">
+    <div className="min-h-dvh bg-[#0B0B0E] text-white flex items-center justify-center px-4 py-12 relative overflow-hidden">
+      {/* ===== Beeline sphere glow ===== */}
+      <div
+        className="b-sphere pointer-events-none absolute -top-44 -right-36 w-[560px] h-[560px] rounded-full"
+        style={{ background: "radial-gradient(circle at center, rgba(240,185,0,0.14), transparent 62%)" }}
+      />
+
+      <div className="w-full max-w-md b-anim">
         {/* Logo */}
         {logoUrl && (
           <div className="text-center mb-6">
@@ -225,45 +239,57 @@ export default function SubPageClient({
         {/* Title */}
         <div className="text-center mb-8">
           {!logoUrl && (
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-accent-500 to-accent-700 mb-4 shadow-lg shadow-accent-500/20">
-              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#F0B900] mb-4 shadow-lg">
+              <svg className="w-7 h-7 text-[#0B0B0E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
           )}
-          <h1 className="text-2xl font-bold text-graphite-50">{title}</h1>
+          <h1 className="text-2xl font-bold text-graphite-50">
+            {title.split(" ").map((word, i) => (
+              <span
+                key={i}
+                className="b-glitch"
+                style={{ animationDelay: `${0.12 + i * 0.09}s` }}
+              >
+                {word}
+                {i < title.split(" ").length - 1 ? "\u00A0" : ""}
+              </span>
+            ))}
+          </h1>
 
           {expiresAt && !isExpired && (
-            <div className="mt-4 inline-flex items-center gap-2 bg-graphite-900 border border-graphite-800 rounded-xl px-4 py-2">
-              <svg className="w-4 h-4 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="mt-4 inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+              <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <span className="text-sm text-graphite-300">
-                Осталось: <span className="text-graphite-100 font-medium">{timeLeft}</span>
+                Осталось: <span className="text-white font-semibold">{timeLeft}</span>
               </span>
             </div>
           )}
         </div>
 
         {/* Subscription link card */}
-        <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 shadow-2xl">
+        <div className="bg-[#131417] border border-white/[0.08] rounded-2xl p-6 shadow-2xl">
           <label className="block text-sm text-graphite-400 mb-2">
             Ссылка на подписку
           </label>
           <div className="flex gap-2">
-            <div className="flex-1 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-sm font-mono text-graphite-300 truncate select-all">
+            <div className="flex-1 min-w-0 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono text-graphite-300 truncate select-all">
               {subUrl}
             </div>
             <button
               onClick={copyLink}
-              className={`px-4 py-3 rounded-xl text-sm font-medium transition-all flex-shrink-0 ${
+              className={`px-4 py-3 rounded-xl text-sm font-bold transition-all flex-shrink-0 ${
                 copied
-                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                  : "bg-accent-500 hover:bg-accent-600 text-white"
+                  ? "bg-[#16A34A] text-[#0B0B0E]"
+                  : "bg-[#F0B900] hover:bg-[#E0A700] text-[#0B0B0E] active:scale-95"
               }`}
+              aria-label="Скопировать ссылку"
             >
               {copied ? (
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               ) : (
@@ -274,57 +300,65 @@ export default function SubPageClient({
             </button>
           </div>
 
-          {/* Actions */}
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          {/* Actions — Beeline arrow buttons */}
+          <div className="mt-6 grid grid-cols-2 gap-3">
             <button
               onClick={() => setShowClients(true)}
-              className="flex items-center justify-center gap-2 bg-graphite-800 hover:bg-graphite-700 border border-graphite-700 hover:border-graphite-600 text-graphite-200 rounded-xl px-4 py-3 text-sm font-medium transition-all"
+              className="btn-beeline flex items-center justify-between gap-2 rounded-xl border border-white/12 bg-white/[0.04] hover:border-[#F0B900]/50 hover:bg-[#F0B900]/[0.06] px-4 py-3 text-sm font-bold transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Добавить в клиент
+              <span className="btn-inner text-left">
+                <span className="btn-copy max-w-[130px] truncate">Добавить в клиент</span>
+                <span className="btn-copy max-w-[130px] truncate" aria-hidden="true">Добавить в клиент</span>
+              </span>
+              <span className="btn-arr flex-shrink-0">
+                <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </span>
             </button>
             <button
               onClick={generateQr}
-              className="flex items-center justify-center gap-2 bg-graphite-800 hover:bg-graphite-700 border border-graphite-700 hover:border-graphite-600 text-graphite-200 rounded-xl px-4 py-3 text-sm font-medium transition-all"
+              className="btn-beeline flex items-center justify-between gap-2 rounded-xl border border-white/12 bg-white/[0.04] hover:border-[#F0B900]/50 hover:bg-[#F0B900]/[0.06] px-4 py-3 text-sm font-bold transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
-              QR-код
+              <span className="btn-inner text-left">
+                <span className="btn-copy max-w-[90px] truncate">QR-код</span>
+                <span className="btn-copy max-w-[90px] truncate" aria-hidden="true">QR-код</span>
+              </span>
+              <span className="btn-arr flex-shrink-0">
+                <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </span>
             </button>
           </div>
         </div>
 
         {/* Extra Configs Section */}
         {extraConfigs.length > 0 && (
-          <div className="mt-6 bg-graphite-900 border border-graphite-800 rounded-2xl overflow-hidden shadow-2xl">
-            <button
-              onClick={() => setShowExtraConfigs(true)}
-              className="w-full flex items-center justify-between p-5 text-left hover:bg-graphite-800/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-accent-500/10 border border-accent-500/20 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-5 h-5 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-graphite-100 block">{extraConfigsTitle || "Дополнительные конфиги"}</span>
-                  <span className="text-xs text-graphite-500">{extraConfigs.length} конфиг(ов)</span>
-                </div>
+          <button
+            onClick={() => setShowExtraConfigs(true)}
+            className="mt-4 w-full flex items-center justify-between rounded-2xl border border-white/[0.08] bg-[#131417] hover:bg-white/[0.03] hover:border-[#F0B900]/40 p-5 text-left transition-colors"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-[#F0B900]/10 border border-[#F0B900]/20 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </div>
-              <svg className="w-5 h-5 text-graphite-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
+              <div className="min-w-0">
+                <span className="text-sm font-semibold text-white block">{extraConfigsTitle || "Дополнительные конфиги"}</span>
+                <span className="text-xs text-graphite-500">{extraConfigs.length} конфиг(ов)</span>
+              </div>
+            </div>
+            <svg className="w-5 h-5 text-graphite-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         )}
 
         {/* Clipboard notification */}
         {clipboardMsg && (
-          <div className="mt-6 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-xl px-4 py-3 text-center animate-fade-in">
+          <div className="mt-6 bg-[#16A34A]/10 border border-[#16A34A]/25 text-emerald-400 text-sm rounded-xl px-4 py-3 text-center animate-fade-in">
             {clipboardMsg}
           </div>
         )}
@@ -336,9 +370,9 @@ export default function SubPageClient({
 
       {/* QR Code Modal */}
       {showQr && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
-            <h3 className="text-lg font-semibold text-graphite-100 text-center mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[6px] p-4">
+          <div className="bg-[#131417] border border-white/10 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
+            <h3 className="text-lg font-bold text-white text-center mb-4">
               QR-код подписки
             </h3>
             {qrDataUrl && (
@@ -353,9 +387,17 @@ export default function SubPageClient({
             )}
             <button
               onClick={() => setShowQr(false)}
-              className="w-full py-3 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-300 hover:text-graphite-100 hover:border-graphite-600 transition-all font-medium"
+              className="btn-beeline w-full flex items-center justify-between rounded-xl bg-[#F0B900] hover:bg-[#E0A700] text-[#0B0B0E] px-4 py-3 font-bold transition-colors"
             >
-              Закрыть
+              <span className="btn-inner text-left">
+                <span className="btn-copy">Закрыть</span>
+                <span className="btn-copy" aria-hidden="true">Закрыть</span>
+              </span>
+              <span className="btn-arr flex-shrink-0">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </span>
             </button>
           </div>
         </div>
@@ -363,9 +405,9 @@ export default function SubPageClient({
 
       {/* Client Selection Modal */}
       {showClients && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
-            <h3 className="text-lg font-semibold text-graphite-100 text-center mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[6px] p-4">
+          <div className="bg-[#131417] border border-white/10 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
+            <h3 className="text-lg font-bold text-white text-center mb-4">
               Выберите клиент
             </h3>
             <div className="grid grid-cols-2 gap-3 mb-4">
@@ -373,10 +415,10 @@ export default function SubPageClient({
                 <button
                   key={client.name}
                   onClick={() => openInClient(client)}
-                  className="flex items-center gap-3 bg-graphite-800 hover:bg-graphite-700 border border-graphite-700 hover:border-accent-500/30 rounded-xl p-4 transition-all text-left"
+                  className="flex items-center gap-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-[#F0B900]/50 rounded-xl p-4 transition-all text-left"
                 >
                   <span className="w-5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: client.icon }} />
-                  <span className="text-sm font-medium text-graphite-200">
+                  <span className="text-sm font-semibold text-white/80">
                     {client.name}
                   </span>
                 </button>
@@ -384,7 +426,7 @@ export default function SubPageClient({
             </div>
             <button
               onClick={() => setShowClients(false)}
-              className="w-full py-3 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-300 hover:text-graphite-100 hover:border-graphite-600 transition-all font-medium"
+              className="w-full py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white/80 hover:text-white transition-colors font-semibold"
             >
               Отмена
             </button>
@@ -394,9 +436,9 @@ export default function SubPageClient({
 
       {/* Extra Configs Modal */}
       {showExtraConfigs && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
-            <h3 className="text-lg font-semibold text-graphite-100 text-center mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[6px] p-4">
+          <div className="bg-[#131417] border border-white/10 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
+            <h3 className="text-lg font-bold text-white text-center mb-4">
               {extraConfigsTitle || "Дополнительные конфиги"}
             </h3>
             <div className="space-y-2 mb-4">
@@ -420,20 +462,20 @@ export default function SubPageClient({
                     setClipboardMsg(`${cfg.name} — скопировано!`);
                     setTimeout(() => setClipboardMsg(""), 3000);
                   }}
-                  className="w-full flex items-center gap-3 bg-graphite-800 hover:bg-graphite-700 border border-graphite-700 hover:border-accent-500/30 rounded-xl p-4 transition-all text-left"
+                  className="w-full flex items-center gap-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-[#F0B900]/50 rounded-xl p-4 transition-all text-left"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-accent-500/10 border border-accent-500/20 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <div className="w-8 h-8 rounded-lg bg-[#F0B900]/10 border border-[#F0B900]/20 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
                   </div>
-                  <span className="text-sm font-medium text-graphite-200">{cfg.name}</span>
+                  <span className="text-sm font-semibold text-white/80">{cfg.name}</span>
                 </button>
               ))}
             </div>
             <button
               onClick={() => setShowExtraConfigs(false)}
-              className="w-full py-3 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-300 hover:text-graphite-100 hover:border-graphite-600 transition-all font-medium"
+              className="w-full py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white/80 hover:text-white transition-colors font-semibold"
             >
               Закрыть
             </button>

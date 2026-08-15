@@ -61,3 +61,113 @@ body {
 .animate-pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
 }
+
+/* ===== Beeline Cloud style animations ===== */
+@keyframes bFadeUp {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bGlitch {
+  0% { opacity: 0; transform: translate(0, 0); clip-path: inset(0 0 0 0); }
+  6% { opacity: 1; transform: translate(-3px, 2px); text-shadow: 3px 0 #F0B900, -3px 0 #2dd4f5; clip-path: inset(0 0 62% 0); }
+  10% { transform: translate(3px, -2px); text-shadow: -3px 0 #F0B900, 3px 0 #2dd4f5; clip-path: inset(58% 0 0 0); }
+  14% { transform: translate(-2px, 1px); text-shadow: 2px 0 #F0B900, -2px 0 #2dd4f5; clip-path: inset(30% 0 28% 0); }
+  18% { transform: translate(1px, 0); text-shadow: 1px 0 #F0B900; clip-path: inset(0 0 40% 0); }
+  22% { transform: translate(-1px, -1px); clip-path: inset(42% 0 0 0); }
+  26% { transform: translate(0, 0); text-shadow: none; clip-path: inset(0 0 0 0); filter: blur(0); }
+  100% { opacity: 1; transform: translate(0, 0); clip-path: inset(0 0 0 0); text-shadow: none; }
+}
+
+@keyframes bSphere {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  30% { transform: translate(5%, -7%) scale(1.18); }
+  65% { transform: translate(-5%, 6%) scale(0.95); }
+}
+
+@keyframes bMarquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes bFlickerDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.b-anim {
+  opacity: 0;
+  animation: bFadeUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.b-anim-1 { animation-delay: 0.08s; }
+.b-anim-2 { animation-delay: 0.16s; }
+
+.b-glitch {
+  display: inline-block;
+  animation: bGlitch 1.15s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.b-sphere {
+  animation: bSphere 14s ease-in-out infinite;
+}
+
+.b-flicker-dot {
+  animation: bFlickerDot 2.4s ease-in-out infinite;
+}
+
+.b-marquee {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: bMarquee 16s linear infinite;
+}
+
+/* Beeline arrow button — label scrolls up on hover, arrow slides right */
+.btn-beeline {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-beeline .btn-inner {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.btn-beeline:hover .btn-inner,
+.btn-beeline:focus-visible .btn-inner {
+  transform: translateY(-50%);
+}
+
+.btn-beeline .btn-copy {
+  display: block;
+  white-space: nowrap;
+}
+
+.btn-beeline .btn-arr {
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.btn-beeline:hover .btn-arr,
+.btn-beeline:focus-visible .btn-arr {
+  transform: translateX(6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .b-anim,
+  .b-glitch,
+  .b-sphere,
+  .b-flicker-dot,
+  .b-marquee {
+    animation: none !important;
+  }
+  .b-anim {
+    opacity: 1;
+  }
+  .btn-beeline .btn-inner {
+    transition: none;
+  }
+  .btn-beeline .btn-arr {
+    transition: none;
+  }
+}
