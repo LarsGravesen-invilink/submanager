@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, type TouchEvent } from "react";
 
 interface VpnClient {
   name: string;
@@ -157,6 +157,24 @@ export default function SubPageClient({
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportMessage, setReportMessage] = useState("");
   const [reportStatus, setReportStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [clientTimeZone, setClientTimeZone] = useState("Europe/Moscow");
+  const [pullDistance, setPullDistance] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const pullStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pullActiveRef = useRef(false);
+  const pullDistanceRef = useRef(0);
+
+  useEffect(() => {
+    try {
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (timeZone) {
+        new Intl.DateTimeFormat("ru-RU", { timeZone }).format();
+        setClientTimeZone(timeZone);
+      }
+    } catch {
+      setClientTimeZone("Europe/Moscow");
+    }
+  }, []);
 
   const submitReport = async () => {
     const message = reportMessage.trim();
@@ -271,6 +289,53 @@ export default function SubPageClient({
     setExtraCopied(false);
   };
 
+  const handlePullStart = (event: TouchEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (
+      event.touches.length !== 1 ||
+      scrollContainerRef.current?.scrollTop !== 0 ||
+      target.closest("button, a, input, textarea, select, [role='button'], [data-no-pull-refresh]")
+    ) {
+      pullStartRef.current = null;
+      return;
+    }
+    const touch = event.touches[0];
+    pullStartRef.current = { x: touch.clientX, y: touch.clientY };
+    pullActiveRef.current = false;
+  };
+
+  const handlePullMove = (event: TouchEvent<HTMLDivElement>) => {
+    const start = pullStartRef.current;
+    if (!start || event.touches.length !== 1 || (scrollContainerRef.current?.scrollTop ?? 0) > 0) return;
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (!pullActiveRef.current) {
+      if (deltaY <= 8 || Math.abs(deltaX) >= deltaY * 0.65) {
+        if (Math.abs(deltaX) > 10 || deltaY < -4) pullStartRef.current = null;
+        return;
+      }
+      pullActiveRef.current = true;
+    }
+
+    if (deltaY > 0 && Math.abs(deltaX) < deltaY * 0.65) {
+      event.preventDefault();
+      const nextDistance = Math.min(112, deltaY * 0.46);
+      pullDistanceRef.current = nextDistance;
+      setPullDistance(nextDistance);
+    }
+  };
+
+  const handlePullEnd = () => {
+    const shouldRefresh = pullActiveRef.current && pullDistanceRef.current >= 72;
+    pullStartRef.current = null;
+    pullActiveRef.current = false;
+    pullDistanceRef.current = 0;
+    setPullDistance(0);
+    if (shouldRefresh) window.location.reload();
+  };
+
   const logoSizeClass = {
     small: "h-12",
     medium: "h-20",
@@ -280,6 +345,20 @@ export default function SubPageClient({
   const lastUpdateAgeHours = lastClientUpdate
     ? (Date.now() - new Date(lastClientUpdate).getTime()) / 3_600_000
     : null;
+  const formattedLastClientUpdate = (() => {
+    if (!lastClientUpdate) return "нет данных";
+    const date = new Date(lastClientUpdate);
+    if (Number.isNaN(date.getTime())) return "нет данных";
+    return new Intl.DateTimeFormat("ru-RU", {
+      timeZone: clientTimeZone,
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(date);
+  })();
   const lastUpdateColor = lastUpdateAgeHours === null || lastUpdateAgeHours <= 6
     ? "text-white"
     : lastUpdateAgeHours <= 24
@@ -342,7 +421,7 @@ export default function SubPageClient({
   }
 
   return (
-    <div className="h-svh max-h-dvh bg-[#0B0B0E] text-white flex flex-col relative overflow-hidden overscroll-none">
+    <div className="sub-public-page bg-[#0B0B0E] text-white flex flex-col relative overscroll-none">
       {/* ===== Fixed scrolling stripes (top / bottom) ===== */}
       <div className="fixed top-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] overflow-hidden select-none pt-[max(env(safe-area-inset-top),8px)] pb-2">
         <div className="b-marquee text-[9px] font-medium tracking-[0.2em]">
@@ -362,7 +441,23 @@ export default function SubPageClient({
       </div>
 
       {/* ===== Scrollable content between fixed marquees ===== */}
-      <div className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pt-[calc(max(env(safe-area-inset-top),8px)+36px)] pb-[calc(max(env(safe-area-inset-bottom),8px)+36px)]">
+      <div
+        ref={scrollContainerRef}
+        className="sub-public-scroller relative flex-1 min-h-0 overscroll-contain px-4 pt-[calc(max(env(safe-area-inset-top),8px)+36px)] pb-[calc(max(env(safe-area-inset-bottom),8px)+36px)]"
+        onTouchStart={handlePullStart}
+        onTouchMove={handlePullMove}
+        onTouchEnd={handlePullEnd}
+        onTouchCancel={handlePullEnd}
+      >
+        <div
+          className={`sub-pull-indicator ${pullDistance > 0 ? "is-visible" : ""}`}
+          style={{ transform: `translate(-50%, ${Math.min(48, pullDistance) - 36}px)`, opacity: Math.min(1, pullDistance / 42) }}
+          aria-hidden="true"
+        >
+          <svg className={pullDistance >= 72 ? "is-ready" : ""} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v12m0 0 5-5m-5 5-5-5" />
+          </svg>
+        </div>
         <div className="sub-page-content relative isolate w-full max-w-md mx-auto py-6">
           {/* ===== Yellow glow under the content ===== */}
           <div
@@ -373,9 +468,6 @@ export default function SubPageClient({
         <div className="mb-4 flex flex-col items-center gap-2 text-center">
           <button onClick={() => setShowWhatsNew(true)} className="text-xs font-semibold tracking-wide text-white/75 underline decoration-[#F0B900]/40 underline-offset-4 hover:text-[#F0B900]">
             Что нового?
-          </button>
-          <button onClick={() => setShowDisclaimer(true)} className="text-[11px] font-medium text-white/55 underline underline-offset-4 hover:text-[#F0B900]">
-            Отказ от ответственности
           </button>
         </div>
         {/* Logo */}
@@ -423,7 +515,7 @@ export default function SubPageClient({
               </div>
             )}
             <div className={`text-xs ${lastUpdateColor}`}>
-              Обновлено в клиенте: {lastClientUpdate ? new Date(lastClientUpdate).toLocaleString("ru-RU") : "нет данных"}
+              Обновлено в клиенте: {formattedLastClientUpdate}
             </div>
             {lastUpdateAgeHours !== null && lastUpdateAgeHours > 24 && (
               <div className="text-[10px] text-red-400">(требуется обновить подписку в клиенте)</div>
@@ -439,8 +531,8 @@ export default function SubPageClient({
         </div>
 
         {/* Subscription link card */}
-        <div className="bg-[#131417] border border-white/[0.08] rounded-2xl p-6 shadow-2xl">
-          <label className="block text-sm text-graphite-400 mb-2">
+        <div className="sub-link-card bg-[#131417] border border-[#F0B900]/[0.12] rounded-2xl p-6 shadow-2xl">
+          <label className="block text-sm text-[#F0B900] mb-2">
             Ссылка на подписку
           </label>
           <div className="flex gap-2">
@@ -533,6 +625,9 @@ export default function SubPageClient({
         </p>
         <button onClick={() => setShowReportInfo(true)} className="mt-2 block w-full text-center text-xs font-semibold text-white/70 underline underline-offset-4 hover:text-[#F0B900]">
           Что-то не работает?
+        </button>
+        <button onClick={() => setShowDisclaimer(true)} className="mt-5 block w-full text-center text-[11px] font-medium text-white/55 underline underline-offset-4 hover:text-[#F0B900]">
+          Отказ от ответственности
         </button>
       </div>
       </div>
