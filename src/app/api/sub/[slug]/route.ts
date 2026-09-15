@@ -10,7 +10,7 @@ import { asc, eq, sql } from "drizzle-orm";
 function isLikelyBrowser(ua: string): boolean {
   const clientPatterns = [
     /clash/i, /v2ray/i, /surge/i, /quantumult/i, /shadowrocket/i,
-    /hiddify/i, /nekobox/i, /nekoray/i, /sing-box/i, /stash/i,
+    /hiddify/i, /nekobox/i, /nekoray/i, /openwrt/i, /sing-box/i, /stash/i,
     /happ/i, /incy/i, /podkop/i, /forkop/i, /streisand/i,
   ];
   if (clientPatterns.some((p) => p.test(ua))) return false;
@@ -93,9 +93,16 @@ export async function GET(
     req.headers.get("x-real-ip") ||
     "unknown";
 
-  const deviceType = requestedClient
+  const detectedDeviceName = requestedClient
     ? requestedClient.charAt(0).toUpperCase() + requestedClient.slice(1)
     : detectDeviceType(ua);
+  const routerName = /openwrt/i.test(ua)
+    ? "OpenWRT"
+    : /sing-box/i.test(ua)
+      ? "sing-box"
+      : null;
+  const deviceName = routerName ?? detectedDeviceName;
+  const deviceType = routerName ? "router" : "vpn_client";
   const isBrowser = !forceRaw && isLikelyBrowser(ua);
 
   const redirectToBrowserPage = () => {
@@ -114,8 +121,8 @@ export async function GET(
     subscriptionId: sub.id,
     ip,
     userAgent: ua,
-    deviceName: deviceType,
-    deviceType: "vpn_client",
+    deviceName,
+    deviceType,
   });
 
   // Update counters

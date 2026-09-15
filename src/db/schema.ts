@@ -92,17 +92,27 @@ export const remoteSources = pgTable("remote_sources", {
 });
 
 // Access log
-export const accessLogs = pgTable("access_logs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  subscriptionId: uuid("subscription_id")
-    .notNull()
-    .references(() => subscriptions.id, { onDelete: "cascade" }),
-  ip: text("ip").notNull(),
-  userAgent: text("user_agent").default(""),
-  deviceName: text("device_name").default(""),
-  deviceType: text("device_type").default(""), // 'browser' | 'vpn_client' | 'router'
-  accessedAt: timestamp("accessed_at").defaultNow().notNull(),
-});
+export const accessLogs = pgTable(
+  "access_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => subscriptions.id, { onDelete: "cascade" }),
+    ip: text("ip").notNull(),
+    userAgent: text("user_agent").default(""),
+    deviceName: text("device_name").default(""),
+    deviceType: text("device_type").default(""), // 'browser' | 'vpn_client' | 'router'
+    accessedAt: timestamp("accessed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("access_logs_subscription_device_accessed_idx").on(
+      table.subscriptionId,
+      table.deviceType,
+      table.accessedAt.desc()
+    ),
+  ]
+);
 
 // Problem reports submitted for subscriptions
 export const subscriptionReports = pgTable(

@@ -249,8 +249,11 @@ CREATE TABLE IF NOT EXISTS access_logs (
     user_agent TEXT DEFAULT '',
     device_name TEXT DEFAULT '',
     device_type TEXT DEFAULT '',
-    accessed_at TIMESTAMP DEFAULT NOW() NOT NULL
+    accessed_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS access_logs_subscription_device_accessed_idx
+    ON access_logs (subscription_id, device_type, accessed_at DESC);
 
 CREATE TABLE IF NOT EXISTS subscription_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -295,6 +298,31 @@ CREATE TABLE IF NOT EXISTS subscription_reports (
 );
 CREATE INDEX IF NOT EXISTS subscription_reports_subscription_read_idx
     ON subscription_reports (subscription_id, is_read);
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'access_logs'
+          AND column_name = 'accessed_at'
+          AND data_type = 'timestamp without time zone'
+    ) THEN
+        ALTER TABLE access_logs
+            ALTER COLUMN accessed_at TYPE TIMESTAMPTZ
+            USING accessed_at AT TIME ZONE 'Europe/Moscow';
+    END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS access_logs_subscription_device_accessed_idx
+    ON access_logs (subscription_id, device_type, accessed_at DESC);
+UPDATE access_logs
+SET device_type = 'router',
+    device_name = CASE
+        WHEN user_agent ~* 'openwrt' THEN 'OpenWRT'
+        ELSE 'sing-box'
+    END
+WHERE device_type = 'vpn_client'
+  AND (user_agent ~* 'openwrt' OR user_agent ~* 'sing-box');
 EOMIGRATE
 
 echo -e "  ${GREEN}✓${NC} База данных настроена"

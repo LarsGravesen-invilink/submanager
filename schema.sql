@@ -64,8 +64,11 @@ CREATE TABLE IF NOT EXISTS access_logs (
     user_agent TEXT DEFAULT '',
     device_name TEXT DEFAULT '',
     device_type TEXT DEFAULT '',
-    accessed_at TIMESTAMP DEFAULT NOW() NOT NULL
+    accessed_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS access_logs_subscription_device_accessed_idx
+    ON access_logs (subscription_id, device_type, accessed_at DESC);
 
 CREATE TABLE IF NOT EXISTS subscription_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

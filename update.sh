@@ -110,6 +110,32 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT ''
 );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'access_logs'
+          AND column_name = 'accessed_at'
+          AND data_type = 'timestamp without time zone'
+    ) THEN
+        ALTER TABLE access_logs
+            ALTER COLUMN accessed_at TYPE TIMESTAMPTZ
+            USING accessed_at AT TIME ZONE 'Europe/Moscow';
+    END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS access_logs_subscription_device_accessed_idx
+    ON access_logs (subscription_id, device_type, accessed_at DESC);
+UPDATE access_logs
+SET device_type = 'router',
+    device_name = CASE
+        WHEN user_agent ~* 'openwrt' THEN 'OpenWRT'
+        ELSE 'sing-box'
+    END
+WHERE device_type = 'vpn_client'
+  AND (user_agent ~* 'openwrt' OR user_agent ~* 'sing-box');
 EOMIGRATE
   echo -e "  ${GREEN}✓${NC} Миграция БД выполнена"
 else
