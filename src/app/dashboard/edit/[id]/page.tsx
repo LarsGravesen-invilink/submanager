@@ -69,6 +69,12 @@ interface RemoteSourceState {
   error?: string;
 }
 
+function toDateTimeLocalValue(value: string): string {
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export default function EditSubscriptionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [sub, setSub] = useState<SubData | null>(null);
@@ -84,6 +90,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [expiryHours, setExpiryHours] = useState(24);
   const [expiryMinutes, setExpiryMinutes] = useState(0);
   const [expiresAtRaw, setExpiresAtRaw] = useState("");
+  const [expiryDirty, setExpiryDirty] = useState(false);
 
   // Logo
   const [logoUrl, setLogoUrl] = useState("");
@@ -129,8 +136,12 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     setClientUpdateHours(data.clientUpdateHours);
     if (data.expiresAt) {
       setExpiryType("custom");
-      setExpiresAtRaw(new Date(data.expiresAt).toISOString().slice(0, 16));
+      setExpiresAtRaw(toDateTimeLocalValue(data.expiresAt));
+    } else {
+      setExpiryType("none");
+      setExpiresAtRaw("");
     }
+    setExpiryDirty(false);
     setLogoUrl(data.logoUrl || "");
     setInitialLogoUrl(data.logoUrl || "");
     setLogoPreview(data.logoUrl || "");
@@ -399,7 +410,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
       ];
       const payload: Record<string, unknown> = {
         name: name.trim(), title: title.trim(), autoUpdateMinutes, clientUpdateHours,
-        expiresAt: calculateExpiryDate(), ...(logoUrl !== initialLogoUrl ? { logoUrl } : {}), pageTitle, whatsNew,
+        ...(expiryDirty ? { expiresAt: calculateExpiryDate() } : {}), ...(logoUrl !== initialLogoUrl ? { logoUrl } : {}), pageTitle, whatsNew,
         showExpiry, showUpload, showDownload, showTotal,
         totalTrafficGb, usedUploadGb, usedDownloadGb,
         extraConfigsTitle: enableExtraConfigs ? extraConfigsTitle.trim() : "",
@@ -624,15 +635,15 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           <h2 className="text-lg font-semibold text-graphite-100 mb-4">Срок действия</h2>
           <div className="flex flex-wrap gap-2 mb-4">
             {(["none", "months", "days", "hours", "custom"] as const).map((t) => (
-              <button key={t} onClick={() => setExpiryType(t)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${expiryType === t ? "bg-accent-500 text-white" : "bg-graphite-800 text-graphite-400 border border-graphite-700"}`}>
+              <button key={t} onClick={() => { setExpiryType(t); setExpiryDirty(true); }} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${expiryType === t ? "bg-accent-500 text-white" : "bg-graphite-800 text-graphite-400 border border-graphite-700"}`}>
                 {t === "none" && "Бессрочно"}{t === "months" && "Месяцы"}{t === "days" && "Дни"}{t === "hours" && "Часы"}{t === "custom" && "Точная дата"}
               </button>
             ))}
           </div>
-          {expiryType === "months" && <div className="flex items-center gap-3"><input type="number" min={1} value={expiryMonths} onChange={(e) => setExpiryMonths(Number(e.target.value) || 1)} onFocus={(e) => e.target.select()} className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400">месяц(ев) от текущей даты</span></div>}
-          {expiryType === "days" && <div className="flex items-center gap-3"><input type="number" min={1} value={expiryDays} onChange={(e) => setExpiryDays(Number(e.target.value) || 1)} onFocus={(e) => e.target.select()} className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400">дней от текущей даты</span></div>}
-          {expiryType === "hours" && <div className="flex items-center gap-3"><input type="number" min={0} value={expiryHours} onChange={(e) => setExpiryHours(Number(e.target.value) || 0)} onFocus={(e) => e.target.select()} className="w-20 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400">ч.</span><input type="number" min={0} max={59} value={expiryMinutes} onChange={(e) => setExpiryMinutes(Number(e.target.value) || 0)} onFocus={(e) => e.target.select()} className="w-20 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400">мин.</span></div>}
-          {expiryType === "custom" && <input type="datetime-local" value={expiresAtRaw} onChange={(e) => setExpiresAtRaw(e.target.value)} className="w-full sm:w-auto bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50" />}
+          {expiryType === "months" && <div className="flex items-center gap-3"><input type="number" min={1} value={expiryMonths} onChange={(e) => { setExpiryMonths(Number(e.target.value) || 1); setExpiryDirty(true); }} onFocus={(e) => e.target.select()} className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400">месяц(ев) от текущей даты</span></div>}
+          {expiryType === "days" && <div className="flex items-center gap-3"><input type="number" min={1} value={expiryDays} onChange={(e) => { setExpiryDays(Number(e.target.value) || 1); setExpiryDirty(true); }} onFocus={(e) => e.target.select()} className="w-24 bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400">дней от текущей даты</span></div>}
+          {expiryType === "hours" && <div className="flex items-center gap-3"><input type="number" min={0} value={expiryHours} onChange={(e) => { setExpiryHours(Number(e.target.value) || 0); setExpiryDirty(true); }} onFocus={(e) => e.target.select()} className="w-20 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400">ч.</span><input type="number" min={0} max={59} value={expiryMinutes} onChange={(e) => { setExpiryMinutes(Number(e.target.value) || 0); setExpiryDirty(true); }} onFocus={(e) => e.target.select()} className="w-20 bg-graphite-800 border border-graphite-700 rounded-xl px-3 py-3 text-graphite-100 text-center focus:outline-none focus:ring-2 focus:ring-accent-500/50" /><span className="text-graphite-400">мин.</span></div>}
+          {expiryType === "custom" && <input type="datetime-local" value={expiresAtRaw} onChange={(e) => { setExpiresAtRaw(e.target.value); setExpiryDirty(true); }} className="w-full sm:w-auto bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50" />}
         </section>
 
         {/* Settings */}

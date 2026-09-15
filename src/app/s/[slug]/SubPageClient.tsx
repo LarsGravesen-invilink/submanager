@@ -443,7 +443,7 @@ export default function SubPageClient({
       {/* ===== Scrollable content between fixed marquees ===== */}
       <div
         ref={scrollContainerRef}
-        className="sub-public-scroller relative flex-1 min-h-0 overscroll-contain px-4 pt-[calc(max(env(safe-area-inset-top),8px)+36px)] pb-[calc(max(env(safe-area-inset-bottom),8px)+36px)]"
+        className="sub-public-scroller relative flex flex-col flex-1 min-h-0 overscroll-contain px-4 pt-[calc(max(env(safe-area-inset-top),8px)+36px)] pb-[calc(max(env(safe-area-inset-bottom),8px)+36px)]"
         onTouchStart={handlePullStart}
         onTouchMove={handlePullMove}
         onTouchEnd={handlePullEnd}
