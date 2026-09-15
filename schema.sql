@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     unique_hits INTEGER NOT NULL DEFAULT 0,
     total_hits INTEGER NOT NULL DEFAULT 0,
     logo_url TEXT DEFAULT '',
-    page_title TEXT DEFAULT ''
+    page_title TEXT DEFAULT '',
+    whats_new TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS subscription_keys (

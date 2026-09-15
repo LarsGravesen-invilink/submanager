@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     logo_url TEXT DEFAULT '',
     logo_size TEXT DEFAULT 'medium',
     page_title TEXT DEFAULT '',
+    whats_new TEXT DEFAULT '',
     show_expiry BOOLEAN NOT NULL DEFAULT TRUE,
     show_upload BOOLEAN NOT NULL DEFAULT FALSE,
     show_download BOOLEAN NOT NULL DEFAULT FALSE,
@@ -263,6 +264,7 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS pause_reason TEXT DEFAULT '';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS backup_keys JSONB DEFAULT '[]';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_configs_title TEXT DEFAULT '';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS extra_configs JSONB DEFAULT '[]';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS whats_new TEXT DEFAULT '';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS logo_size TEXT DEFAULT 'medium';
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS show_expiry BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS show_upload BOOLEAN NOT NULL DEFAULT FALSE;
