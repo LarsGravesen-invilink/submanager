@@ -98,13 +98,24 @@ export async function GET(
     : detectDeviceType(ua);
   const isBrowser = !forceRaw && isLikelyBrowser(ua);
 
-  // Log access
+  const redirectToBrowserPage = () => {
+    const baseUrl =
+      req.headers.get("x-forwarded-proto") === "https"
+        ? `https://${req.headers.get("host")}`
+        : `${req.nextUrl.protocol}//${req.headers.get("host")}`;
+    return NextResponse.redirect(`${baseUrl}/s/${slug}`);
+  };
+
+  // Browser page loads are redirects, not subscription retrievals.
+  if (isBrowser) return redirectToBrowserPage();
+
+  // Log only actual raw/VPN-client subscription retrievals.
   await db.insert(accessLogs).values({
     subscriptionId: sub.id,
     ip,
     userAgent: ua,
     deviceName: deviceType,
-    deviceType: isBrowser ? "browser" : "vpn_client",
+    deviceType: "vpn_client",
   });
 
   // Update counters
@@ -123,15 +134,6 @@ export async function GET(
     })
     .where(eq(subscriptions.id, sub.id));
 
-  // Helper
-  const redirectToBrowserPage = () => {
-    const baseUrl =
-      req.headers.get("x-forwarded-proto") === "https"
-        ? `https://${req.headers.get("host")}`
-        : `${req.nextUrl.protocol}//${req.headers.get("host")}`;
-    return NextResponse.redirect(`${baseUrl}/s/${slug}`);
-  };
-
   // Build profile title in the format supported by Hiddify/Happ/Incy/NekoBox/etc:
   // Profile-Title: base64:<utf8-base64>
   const encodeTitle = (text: string) =>
@@ -142,8 +144,6 @@ export async function GET(
 
   // ==== Paused ====
   if (!sub.isActive) {
-    if (isBrowser) return redirectToBrowserPage();
-
     const reason = (sub.pauseReason as string) || "Подписка приостановлена";
     const bKeys = (sub.backupKeys as string[] | null) || [];
     const lines: string[] = [];
@@ -186,7 +186,6 @@ export async function GET(
   const isExpired = sub.expiresAt && new Date(sub.expiresAt) < new Date();
 
   if (isExpired) {
-    if (isBrowser) return redirectToBrowserPage();
     // Dummy key with expiry name so clients like Incy can parse
     const expiredContent = DUMMY_KEY + "#" + encodeURIComponent("ℹ️ПУСТОℹ️");
     return new NextResponse(Buffer.from(expiredContent, "utf-8").toString("base64"), {
@@ -200,9 +199,6 @@ export async function GET(
       },
     });
   }
-
-  // ==== Browser ====
-  if (isBrowser) return redirectToBrowserPage();
 
   // ==== VPN Client — return keys ====
   const keys = await db

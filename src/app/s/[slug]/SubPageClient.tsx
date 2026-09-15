@@ -66,6 +66,7 @@ export default function SubPageClient({
   showTotal,
   totalTrafficGb,
   whatsNew,
+  lastClientUpdate,
 }: {
   slug: string;
   title: string;
@@ -78,6 +79,7 @@ export default function SubPageClient({
   showTotal: boolean;
   totalTrafficGb: number;
   whatsNew: string;
+  lastClientUpdate: string | null;
 }) {
   const [subUrl, setSubUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -147,11 +149,10 @@ export default function SubPageClient({
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showExtraConfigs, setShowExtraConfigs] = useState(false);
   const [selectedExtraConfig, setSelectedExtraConfig] = useState<{name: string; key: string} | null>(null);
-  const [showExtraQr, setShowExtraQr] = useState(false);
   const [extraCopied, setExtraCopied] = useState(false);
-  const [extraQrDataUrl, setExtraQrDataUrl] = useState("");
   const [clientView, setClientView] = useState<"picker" | "warning">("picker");
-  const [showHappNotice, setShowHappNotice] = useState(false);
+  const [manualImportClient, setManualImportClient] = useState<"Happ" | "Shadowrocket" | null>(null);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showReportInfo, setShowReportInfo] = useState(false);
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportMessage, setReportMessage] = useState("");
@@ -186,10 +187,11 @@ export default function SubPageClient({
   };
 
   const openInClient = (client: VpnClient) => {
-    if (client.name === "Happ") {
+    if (client.name === "Happ" || client.name === "Shadowrocket") {
+      const manualClient = client.name;
       void navigator.clipboard.writeText(subUrl).then(() => {
         setShowClients(false);
-        setShowHappNotice(true);
+        setManualImportClient(manualClient);
       }).catch(() => setClientNotice("Не удалось скопировать ссылку. Скопируйте её вручную"));
       return;
     }
@@ -243,26 +245,7 @@ export default function SubPageClient({
 
   const openExtraConfig = (config: {name: string; key: string}) => {
     setSelectedExtraConfig(config);
-    setShowExtraQr(false);
     setExtraCopied(false);
-    setExtraQrDataUrl("");
-  };
-
-  const generateExtraConfigQr = async () => {
-    if (!selectedExtraConfig) return;
-    setShowExtraQr(true);
-    setExtraQrDataUrl("");
-    try {
-      const res = await fetch("/api/qrcode", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: selectedExtraConfig.key.trim() }),
-      });
-      const data = await res.json();
-      setExtraQrDataUrl(data.dataUrl || "");
-    } catch {
-      setExtraQrDataUrl("");
-    }
   };
 
   const copyExtraConfig = async () => {
@@ -285,9 +268,7 @@ export default function SubPageClient({
   const closeExtraConfigs = () => {
     setShowExtraConfigs(false);
     setSelectedExtraConfig(null);
-    setShowExtraQr(false);
     setExtraCopied(false);
-    setExtraQrDataUrl("");
   };
 
   const logoSizeClass = {
@@ -295,6 +276,15 @@ export default function SubPageClient({
     medium: "h-20",
     large: "h-32",
   }[logoSize] || "h-16";
+
+  const lastUpdateAgeHours = lastClientUpdate
+    ? (Date.now() - new Date(lastClientUpdate).getTime()) / 3_600_000
+    : null;
+  const lastUpdateColor = lastUpdateAgeHours === null || lastUpdateAgeHours <= 6
+    ? "text-white"
+    : lastUpdateAgeHours <= 24
+      ? "text-yellow-400"
+      : "text-red-400";
 
   // Paused subscription
   if (!isActive) {
@@ -352,7 +342,7 @@ export default function SubPageClient({
   }
 
   return (
-    <div className="h-svh max-h-svh bg-[#0B0B0E] text-white flex flex-col relative overflow-hidden overscroll-none">
+    <div className="h-svh max-h-dvh bg-[#0B0B0E] text-white flex flex-col relative overflow-hidden overscroll-none">
       {/* ===== Fixed scrolling stripes (top / bottom) ===== */}
       <div className="fixed top-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] overflow-hidden select-none pt-[max(env(safe-area-inset-top),8px)] pb-2">
         <div className="b-marquee text-[9px] font-medium tracking-[0.2em]">
@@ -371,40 +361,23 @@ export default function SubPageClient({
         </div>
       </div>
 
-      <div
-        className="fixed left-0 right-0 z-20 pointer-events-none px-4 text-center"
-        style={{ bottom: "calc(max(env(safe-area-inset-bottom), 8px) + 30px)" }}
-      >
-        <div className="inline-flex max-w-full flex-col items-center gap-1.5">
-          <button
-            onClick={() => setShowWhatsNew(true)}
-            className="pointer-events-auto text-xs font-semibold tracking-wide text-white/75 underline decoration-[#F0B900]/40 underline-offset-4 transition-colors hover:text-[#F0B900]"
-          >
-            Что нового?
-          </button>
-          {(!expiresAt || (showTotal && totalTrafficGb > 0)) && (
-            <div className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-0.5 rounded-full border border-[#F0B900]/10 bg-[#0B0B0E]/65 px-3 py-1 text-[10px] sm:text-xs font-medium tracking-wide text-white/55 backdrop-blur-md">
-              {!expiresAt && <span className="text-[#F0B900]/70">Бессрочная подписка</span>}
-              {showTotal && totalTrafficGb > 0 && (
-                <span>Включено трафика: <span className="text-[#F0B900]/75">{totalTrafficGb}Гб</span></span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ===== Content (between top and center) ===== */}
-      <button onClick={() => setShowReportInfo(true)} className="fixed top-9 left-1/2 z-40 -translate-x-1/2 text-xs font-semibold text-white/70 underline underline-offset-4 hover:text-[#F0B900]">
-        Что-то не работает?
-      </button>
-      <div className="relative flex-1 min-h-0 flex flex-col items-center px-4 pt-12 pb-24 overflow-hidden">
-        <div className="sub-page-content relative isolate w-full max-w-md my-auto">
+      {/* ===== Scrollable content between fixed marquees ===== */}
+      <div className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 pt-[calc(max(env(safe-area-inset-top),8px)+36px)] pb-[calc(max(env(safe-area-inset-bottom),8px)+36px)]">
+        <div className="sub-page-content relative isolate w-full max-w-md mx-auto py-6">
           {/* ===== Yellow glow under the content ===== */}
           <div
             className="pointer-events-none absolute left-1/2 -translate-x-1/2 -bottom-24 w-[560px] h-[320px] rounded-full -z-10"
             style={{ background: "radial-gradient(ellipse at 50% 80%, rgba(240,185,0,0.2), transparent 70%)" }}
           />
           <div className="relative b-anim">
+        <div className="mb-4 flex flex-col items-center gap-2 text-center">
+          <button onClick={() => setShowWhatsNew(true)} className="text-xs font-semibold tracking-wide text-white/75 underline decoration-[#F0B900]/40 underline-offset-4 hover:text-[#F0B900]">
+            Что нового?
+          </button>
+          <button onClick={() => setShowDisclaimer(true)} className="text-[11px] font-medium text-white/55 underline underline-offset-4 hover:text-[#F0B900]">
+            Отказ от ответственности
+          </button>
+        </div>
         {/* Logo */}
         <div
           className="text-center mb-6 select-none"
@@ -438,14 +411,29 @@ export default function SubPageClient({
             ))}
           </h1>
 
-          {expiresAt && !isExpired && (
-            <div className="mt-4 inline-flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-2">
-              <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="inline-flex items-baseline gap-1 text-sm text-graphite-300">
-                <span>Осталось:</span><span className="text-white font-semibold">{timeLeft}</span>
-              </span>
+          <div className="mt-4 inline-flex flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-4 py-2">
+            {expiresAt && !isExpired && (
+              <div className="inline-flex items-center gap-2">
+                <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="inline-flex items-baseline gap-1 text-sm text-graphite-300">
+                  <span>Осталось:</span><span className="text-white font-semibold">{timeLeft}</span>
+                </span>
+              </div>
+            )}
+            <div className={`text-xs ${lastUpdateColor}`}>
+              Обновлено в клиенте: {lastClientUpdate ? new Date(lastClientUpdate).toLocaleString("ru-RU") : "нет данных"}
+            </div>
+            {lastUpdateAgeHours !== null && lastUpdateAgeHours > 24 && (
+              <div className="text-[10px] text-red-400">(требуется обновить подписку в клиенте)</div>
+            )}
+          </div>
+          {(!expiresAt || (showTotal && totalTrafficGb > 0)) && (
+            <div className="mt-2 text-[10px] font-medium tracking-wide text-white/55">
+              {!expiresAt && <span className="text-[#F0B900]/70">Бессрочная подписка</span>}
+              {!expiresAt && showTotal && totalTrafficGb > 0 && <span> · </span>}
+              {showTotal && totalTrafficGb > 0 && <span>Включено трафика: <span className="text-[#F0B900]/75">{totalTrafficGb}Гб</span></span>}
             </div>
           )}
         </div>
@@ -508,9 +496,7 @@ export default function SubPageClient({
           <button
             onClick={() => {
               setSelectedExtraConfig(null);
-              setShowExtraQr(false);
               setExtraCopied(false);
-              setExtraQrDataUrl("");
               if (extraConfigs.length === 1) {
                 openExtraConfig(extraConfigs[0]);
               }
@@ -545,6 +531,9 @@ export default function SubPageClient({
         <p className="text-center text-graphite-700 text-xs mt-8">
           SubManager by LarsGravesen
         </p>
+        <button onClick={() => setShowReportInfo(true)} className="mt-2 block w-full text-center text-xs font-semibold text-white/70 underline underline-offset-4 hover:text-[#F0B900]">
+          Что-то не работает?
+        </button>
       </div>
       </div>
       </div>
@@ -572,6 +561,18 @@ export default function SubPageClient({
             >
               Закрыть
             </button>
+          </div>
+        </div>
+      )}
+
+      {showDisclaimer && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-[6px] p-4">
+          <div className="flex max-h-[min(86dvh,680px)] w-full max-w-md flex-col rounded-2xl border border-[#F0B900]/15 bg-[#131417] p-5 shadow-2xl animate-slide-up">
+            <h3 className="shrink-0 text-center text-lg font-bold text-[#F0B900]">ОТКАЗ ОТ ОТВЕТСТВЕННОСТИ</h3>
+            <div className="my-5 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3">
+              <p className="text-sm leading-7 text-white/75">Настоящая подписка на конфигурации VPN предназначена исключительно для индивидуального использования на одном устройстве; в случае выявления множественных одновременных подключений, аномально высокого трафика, использования сервиса для осуществления спам-рассылок (несанкционированных массовых коммуникаций), совершения вредоносных кибератак, несанкционированного доступа к компьютерной информации или иных деструктивных действий, владелец сервиса, предоставляющий подписку оставляет за собой право незамедлительно аннулировать подписку в одностороннем порядке без предварительного уведомления и возврата средств (если была произведена оплата за использование сервиса), при этом сервис не несет ответственности за любые прямые или косвенные убытки пользователя. @LarsGravesen</p>
+            </div>
+            <button onClick={() => setShowDisclaimer(false)} className="shrink-0 w-full rounded-xl bg-white/[0.06] py-3 font-semibold text-white/80 hover:bg-white/[0.12]">Закрыть</button>
           </div>
         </div>
       )}
@@ -612,7 +613,7 @@ export default function SubPageClient({
           <div className="bg-[#131417] border border-white/10 rounded-2xl p-6 w-full max-w-sm animate-slide-up shadow-2xl">
             {clientView === "warning" ? <>
               <h3 className="text-lg font-bold text-[#F0B900] text-center mb-4">Важно</h3>
-              <p className="rounded-xl border border-[#F0B900]/30 bg-[#F0B900]/10 p-5 text-base font-semibold leading-relaxed text-white">Не все клиенты поддерживают автодобавление подписки. В случае если подписка не добавляется автоматически, скопируйте ссылку и вставьте в клиент вручную.</p>
+               <p className="rounded-xl border border-[#F0B900]/30 bg-[#F0B900]/10 p-5 text-lg font-semibold leading-relaxed text-white">В случае если подписка не добавляется автоматически, скопируйте ссылку и вставьте в клиент вручную.</p>
               <button onClick={() => setClientView("picker")} className="mt-4 w-full py-3 rounded-xl bg-[#F0B900] text-[#0B0B0E] font-bold">Назад</button>
             </> : <>
             <h3 className="text-lg font-bold text-white text-center mb-4">
@@ -651,7 +652,7 @@ export default function SubPageClient({
                 </button>
               ))}
             </div>
-            <button onClick={() => setClientView("warning")} className="mb-4 text-left text-[11px] leading-relaxed text-[#F0B900]/80 underline underline-offset-2">Не все клиенты поддерживают автодобавление подписки. В случае если подписка не добавляется автоматически, скопируйте ссылку и вставьте в клиент вручную.</button>
+             <button onClick={() => setClientView("warning")} className="mb-4 text-left text-[9px] leading-relaxed text-[#F0B900]/80 underline underline-offset-2">В случае если подписка не добавляется автоматически, скопируйте ссылку и вставьте в клиент вручную.</button>
             <button
               onClick={() => { setShowClients(false); setClientView("picker"); }}
               className="w-full py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-white/80 hover:text-white transition-colors font-semibold"
@@ -663,7 +664,7 @@ export default function SubPageClient({
         </div>
       )}
 
-      {showHappNotice && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"><div className="max-w-md rounded-2xl border border-emerald-500/30 bg-[#131417] p-6 shadow-2xl"><p className="rounded-xl bg-emerald-500/10 p-4 text-center font-bold leading-relaxed text-emerald-300">Ссылка скопирована. Откройте приложение Happ, добавьте подписку вручную нажав &quot;+&quot;, а затем &quot;Вставить из буфера обмена&quot;.</p><button onClick={() => setShowHappNotice(false)} className="mt-5 w-full rounded-xl bg-white/10 py-3 font-semibold">Закрыть</button></div></div>}
+      {manualImportClient && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"><div className="max-w-md rounded-2xl border border-emerald-500/30 bg-[#131417] p-6 shadow-2xl"><p className="rounded-xl bg-emerald-500/10 p-4 text-center font-bold leading-relaxed text-emerald-300">{manualImportClient === "Happ" ? <>Ссылка скопирована. Откройте приложение Happ, добавьте подписку вручную нажав &quot;+&quot;, а затем &quot;Вставить из буфера обмена&quot;.</> : <>Ссылка скопирована. Откройте приложение Shadowrocket, нажмите на три точки в правом верхнем углу экрана и выберите &quot;Импорт из буфера обмена.&quot;</>}</p><button onClick={() => setManualImportClient(null)} className="mt-5 w-full rounded-xl bg-white/10 py-3 font-semibold">Закрыть</button></div></div>}
 
       {showReportInfo && <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"><div className="max-w-md rounded-2xl border border-white/10 bg-[#131417] p-6 shadow-2xl"><h3 className="mb-3 text-lg font-bold">Сообщить о проблеме</h3><p className="text-sm leading-relaxed text-white/75">Если что-то не работает, напишите об этом. Постарайтесь детально и точно описать что именно не работает или работает не корректно.</p><div className="mt-5 flex gap-3"><button onClick={() => { setShowReportInfo(false); setShowReportForm(true); setReportStatus("idle"); }} className="flex-1 rounded-xl bg-[#F0B900] py-3 font-bold text-black">Написать о проблеме</button><button onClick={() => setShowReportInfo(false)} className="flex-1 rounded-xl bg-white/10 py-3 font-semibold">Закрыть</button></div></div></div>}
 
@@ -696,29 +697,6 @@ export default function SubPageClient({
                   ))}
                 </div>
               </>
-            ) : showExtraQr ? (
-              <>
-                <h3 className="text-lg font-bold text-white text-center mb-4 break-words">
-                  {selectedExtraConfig.name}
-                </h3>
-                <div className="flex justify-center mb-5 min-h-[min(72vw,320px)]">
-                  {extraQrDataUrl ? (
-                    <img
-                      src={extraQrDataUrl}
-                      alt={`QR-код: ${selectedExtraConfig.name}`}
-                      className="w-[min(72vw,320px)] h-[min(72vw,320px)] rounded-2xl bg-white border border-white/10 p-3 shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 my-auto border-2 border-[#F0B900] border-t-transparent rounded-full animate-spin" />
-                  )}
-                </div>
-                <button
-                  onClick={() => setShowExtraQr(false)}
-                  className="w-full mb-3 py-3 rounded-xl bg-[#F0B900] hover:bg-[#E0A700] text-[#0B0B0E] font-bold transition-colors"
-                >
-                  Назад
-                </button>
-              </>
             ) : (
               <>
                 <h3 className="text-lg font-bold text-white text-center mb-5 break-words">
@@ -750,15 +728,9 @@ export default function SubPageClient({
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={generateExtraConfigQr}
-                    className="w-full flex items-center justify-between gap-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white/90 px-4 py-3.5 font-bold transition-colors"
-                  >
-                    <span>Показать QR</span>
-                    <svg className="w-5 h-5 flex-shrink-0 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h2m4 0v2m-6 4h2m2-4h2v4h-4v-2" />
-                    </svg>
-                  </button>
+                  <div className="rounded-xl border border-[#F0B900]/30 bg-[#F0B900]/10 px-4 py-3 text-sm leading-relaxed text-white/85">
+                    Конфигурации для некоторых протоколов работают только на одном устройстве. При добавлении одинаковых конфигураций на несколько устройств, возможны проблемы с подключением и работой протокола. Во избежание проблем, используйте конфигурацию только на одном устройстве!
+                  </div>
                 </div>
               </>
             )}

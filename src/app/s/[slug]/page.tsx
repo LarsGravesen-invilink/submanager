@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { subscriptions } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { accessLogs, subscriptions } from "@/db/schema";
+import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import SubPageClient from "./SubPageClient";
 
@@ -23,6 +23,16 @@ export default async function SubscriptionPublicPage({
     notFound();
   }
 
+  const [latestClientAccess] = await db
+    .select({ accessedAt: accessLogs.accessedAt })
+    .from(accessLogs)
+    .where(and(
+      eq(accessLogs.subscriptionId, sub.id),
+      eq(accessLogs.deviceType, "vpn_client")
+    ))
+    .orderBy(desc(accessLogs.accessedAt))
+    .limit(1);
+
   return (
     <SubPageClient
       slug={sub.slug}
@@ -36,6 +46,7 @@ export default async function SubscriptionPublicPage({
       showTotal={sub.showTotal}
       totalTrafficGb={sub.totalTrafficGb}
       whatsNew={sub.whatsNew || ""}
+      lastClientUpdate={latestClientAccess?.accessedAt.toISOString() ?? null}
     />
   );
 }
