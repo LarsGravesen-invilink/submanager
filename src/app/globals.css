@@ -133,6 +133,23 @@ body {
   animation: bMarqueeRev 16s linear infinite;
 }
 
+/* Keep the subscription page inside the visible mobile browser viewport. */
+.sub-page-content {
+  transform-origin: center;
+}
+
+@media (max-height: 760px) {
+  .sub-page-content { zoom: 0.9; }
+}
+
+@media (max-height: 680px) {
+  .sub-page-content { zoom: 0.82; }
+}
+
+@media (max-height: 600px) {
+  .sub-page-content { zoom: 0.72; }
+}
+
 /* Beeline arrow button — label scrolls up on hover, arrow slides right */
 .btn-beeline {
   position: relative;

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { subscriptions, subscriptionKeys, remoteSources, settings } from "@/db/schema";
+import { subscriptions, subscriptionKeys, remoteSources, settings, subscriptionReports } from "@/db/schema";
 import { getSession } from "@/lib/auth";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
 import { filterAliveKeys } from "@/lib/keyHealth";
@@ -28,11 +28,24 @@ export async function GET() {
   }
 
   const subs = await db
-    .select()
+    .select({
+      subscription: subscriptions,
+      unreadReportCount: sql<number>`count(${subscriptionReports.id}) filter (where ${subscriptionReports.isRead} = false)::int`,
+    })
     .from(subscriptions)
+    .leftJoin(
+      subscriptionReports,
+      eq(subscriptionReports.subscriptionId, subscriptions.id)
+    )
+    .groupBy(subscriptions.id)
     .orderBy(desc(subscriptions.createdAt));
 
-  return NextResponse.json(subs);
+  return NextResponse.json(
+    subs.map(({ subscription, unreadReportCount }) => ({
+      ...subscription,
+      unreadReportCount,
+    }))
+  );
 }
 
 export async function POST(req: Request) {

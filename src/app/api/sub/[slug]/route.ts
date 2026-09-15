@@ -84,13 +84,19 @@ export async function GET(
   }
 
   const ua = req.headers.get("user-agent") || "";
+  const requestedClient = req.nextUrl.searchParams.get("client")?.toLowerCase() || "";
+  const forceRaw =
+    req.nextUrl.searchParams.get("format") === "raw" ||
+    ["happ", "incy", "hiddify", "v2ray", "shadowrocket"].includes(requestedClient);
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     "unknown";
 
-  const deviceType = detectDeviceType(ua);
-  const isBrowser = isLikelyBrowser(ua);
+  const deviceType = requestedClient
+    ? requestedClient.charAt(0).toUpperCase() + requestedClient.slice(1)
+    : detectDeviceType(ua);
+  const isBrowser = !forceRaw && isLikelyBrowser(ua);
 
   // Log access
   await db.insert(accessLogs).values({

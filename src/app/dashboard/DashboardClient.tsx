@@ -13,6 +13,15 @@ interface Subscription {
   expiresAt: string | null;
   uniqueHits: number;
   totalHits: number;
+  unreadReportCount: number;
+}
+
+interface Report {
+  id: string;
+  message: string;
+  createdAt: string;
+  ip?: string | null;
+  isRead?: boolean;
 }
 
 export default function DashboardClient({ initialCfg }: { initialCfg: Record<string, string> }) {
@@ -33,6 +42,12 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   const [pauseWithBackup, setPauseWithBackup] = useState(false);
   const [pauseBackupKeys, setPauseBackupKeys] = useState("");
   const [pauseMsg, setPauseMsg] = useState("");
+  const [reportSub, setReportSub] = useState<Subscription | null>(null);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState("");
+  const [newOnly, setNewOnly] = useState(false);
+  const [deleteReport, setDeleteReport] = useState<Report | null>(null);
   const pauseInputRef = { current: null as HTMLInputElement | null };
   const router = useRouter();
 
@@ -55,12 +70,25 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
     loadSubs();
   }, [loadSubs]);
 
-  // System info polling
+  // Live system info polling
   useEffect(() => {
-    const load = () => fetch("/api/system").then(r => r.ok ? r.json() : null).then(d => { if (d) setSysInfo(d); }).catch(() => {});
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch("/api/system", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (active) setSysInfo(data);
+      } catch {
+        // Keep the last successful snapshot visible.
+      }
+    };
     load();
-    const iv = setInterval(load, 10000);
-    return () => clearInterval(iv);
+    const interval = setInterval(load, 2000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const getSubUrl = (slug: string) => `${window.location.origin}/api/sub/${slug}`;
@@ -144,6 +172,39 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
     loadSubs();
   };
 
+  const openReports = async (sub: Subscription) => {
+    setReportSub(sub);
+    setReportsLoading(true);
+    setReportsError("");
+    const unread = sub.unreadReportCount > 0;
+    setNewOnly(unread);
+    try {
+      const response = await fetch(`/api/subscriptions/${sub.id}/reports`, { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      const list: Report[] = Array.isArray(data.reports) ? data.reports : [];
+      setReports(list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      if (unread) {
+        const marked = await fetch(`/api/subscriptions/${sub.id}/reports`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markRead: true }),
+        });
+        if (!marked.ok) throw new Error();
+        setSubs(current => current.map(item => item.id === sub.id ? { ...item, unreadReportCount: 0 } : item));
+      }
+    } catch { setReportsError("Не удалось загрузить сообщения. Попробуйте ещё раз."); }
+    finally { setReportsLoading(false); }
+  };
+
+  const confirmDeleteReport = async () => {
+    if (!reportSub || !deleteReport) return;
+    try {
+      const response = await fetch(`/api/subscriptions/${reportSub.id}/reports/${deleteReport.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error();
+      setReports(current => current.filter(report => report.id !== deleteReport.id));
+      setDeleteReport(null);
+    } catch { setReportsError("Не удалось удалить сообщение."); setDeleteReport(null); }
+  };
+
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
@@ -171,9 +232,9 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   }
 
   return (
-    <div className="min-h-screen bg-graphite-950">
+    <div className="h-svh max-h-svh bg-graphite-950 flex flex-col overflow-hidden overscroll-none">
       {/* System status bar */}
-      <div className="bg-graphite-950 border-b border-graphite-800/50 px-4 sm:px-6 lg:px-8">
+      <div className="shrink-0 bg-graphite-950 border-b border-graphite-800/50 px-4 sm:px-6 lg:px-8 pt-[max(env(safe-area-inset-top),8px)] pb-1">
         <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 h-7 text-[10px] text-graphite-500 font-mono">
           <span>🕐 {sysInfo.time}</span>
           <span>CPU {sysInfo.cpu}</span>
@@ -181,7 +242,7 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
           <span>SSD {sysInfo.disk}</span>
         </div>
       </div>
-      <header className="sticky top-0 z-50 bg-graphite-950/80 backdrop-blur-xl border-b border-graphite-800">
+      <header className="shrink-0 z-40 bg-graphite-950/80 backdrop-blur-xl border-b border-graphite-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center">
@@ -209,13 +270,13 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h2 className="text-2xl font-bold text-graphite-50">Подписки</h2>
             <p className="text-graphite-400 text-sm mt-1">{subs.length === 0 ? "Нет созданных подписок" : `Всего: ${subs.length}`}</p>
           </div>
-          <button onClick={() => router.push("/dashboard/create")} className="inline-flex items-center gap-2 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white font-medium px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-accent-500/20 hover:shadow-accent-500/30">
+          <button onClick={() => router.push("/dashboard/create")} className="inline-flex w-[210px] items-center justify-center gap-2 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white font-bold text-base px-5 py-3 rounded-xl transition-all shadow-lg shadow-accent-500/20 hover:shadow-accent-500/30">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
             Создать подписку
           </button>
@@ -249,12 +310,13 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
                     </div>
 
                     <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                      {expired && <button onClick={() => setExtendModal(sub)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Продлить</button>}
-                      <button onClick={() => copyLink(sub.slug)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all ${copied === sub.slug ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30"}`} title="Копировать ссылку">{copied === sub.slug ? <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg><span className="hidden sm:inline">Скопировано</span></> : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg><span className="hidden sm:inline">Ссылка</span></>}</button>
-                      <button onClick={() => router.push(`/dashboard/edit/${sub.id}`)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30 transition-all" title="Редактировать"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg><span className="hidden sm:inline">Изменить</span></button>
-                      {!expired && <button onClick={() => handlePauseClick(sub)} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all ${sub.isActive ? "bg-graphite-800 text-yellow-400 border-graphite-700 hover:border-yellow-500/30" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"}`} title={sub.isActive ? "Приостановить" : "Возобновить"}>{sub.isActive ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}</button>}
-                      <button onClick={() => deleteSub(sub.id, sub.name)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-red-400 border border-graphite-700 hover:border-red-500/30 hover:bg-red-500/10 transition-all" title="Удалить"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
-                      <button onClick={() => { const url = getSubUrl(sub.slug); if (navigator.share) navigator.share({ title: sub.name, text: sub.title || sub.name, url }).catch(() => {}); }} className="sm:hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium bg-graphite-800 text-accent-400 border border-graphite-700 hover:border-accent-500/30 transition-all" title="Поделиться"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg></button>
+                      {expired && <button onClick={() => setExtendModal(sub)} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>Продлить</button>}
+                      <button onClick={() => copyLink(sub.slug)} className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${copied === sub.slug ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30"}`} title="Копировать ссылку">{copied === sub.slug ? <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg><span className="hidden sm:inline">Скопировано</span></> : <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg><span className="hidden sm:inline">Ссылка</span></>}</button>
+                      <button onClick={() => router.push(`/dashboard/edit/${sub.id}`)} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium bg-graphite-800 text-graphite-300 hover:text-accent-400 border border-graphite-700 hover:border-accent-500/30 transition-all" title="Редактировать"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg><span className="hidden sm:inline">Изменить</span></button>
+                      {!expired && <button onClick={() => handlePauseClick(sub)} className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium border transition-all ${sub.isActive ? "bg-graphite-800 text-yellow-400 border-graphite-700 hover:border-yellow-500/30" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"}`} title={sub.isActive ? "Приостановить" : "Возобновить"}>{sub.isActive ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}</button>}
+                      <button onClick={() => deleteSub(sub.id, sub.name)} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium bg-graphite-800 text-red-400 border border-graphite-700 hover:border-red-500/30 hover:bg-red-500/10 transition-all" title="Удалить"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                       <button onClick={() => { const url = getSubUrl(sub.slug); if (navigator.share) navigator.share({ title: sub.name, text: sub.title || sub.name, url }).catch(() => {}); }} className="sm:hidden inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium bg-graphite-800 text-accent-400 border border-graphite-700 hover:border-accent-500/30 transition-all" title="Поделиться"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg></button>
+                       <button onClick={() => openReports(sub)} className={`relative inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium border transition-all ${sub.unreadReportCount > 0 ? "bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20" : "bg-graphite-800 text-graphite-400 border-graphite-700 hover:text-graphite-200"}`} title="Сообщения о проблемах"><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h6m-8 8l2.5-3H19a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2v3z" /></svg>{sub.unreadReportCount > 0 && <span className="min-w-5 rounded-full bg-red-500 px-1.5 text-center text-xs text-white">{sub.unreadReportCount}</span>}</button>
                     </div>
                   </div>
                 </div>
@@ -280,7 +342,7 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         </div>
       )}
 
-      <footer className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center">
+      <footer className="shrink-0 w-full border-t border-graphite-800/50 bg-graphite-950 px-4 sm:px-6 lg:px-8 py-3 text-center">
         <p className="text-graphite-600 text-xs">{initialCfg.footerText || "SubManager by LarsGravesen"}</p>
       </footer>
 
@@ -331,6 +393,10 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
           </div>
         </div>
       )}
+
+      {reportSub && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"><div className="flex max-h-[85dvh] w-full max-w-xl flex-col rounded-2xl border border-graphite-700 bg-graphite-900 p-6 shadow-2xl"><div className="mb-4 flex items-start justify-between gap-4"><div><h3 className="text-lg font-semibold text-graphite-100">Сообщения о проблемах</h3><p className="text-sm text-graphite-400">{reportSub.name}</p></div><button onClick={() => setReportSub(null)} className="text-graphite-400 hover:text-white">Закрыть</button></div>{reportsLoading ? <div className="my-10 self-center h-7 w-7 animate-spin rounded-full border-2 border-accent-500 border-t-transparent" /> : reportsError ? <p className="rounded-xl bg-red-500/10 p-4 text-sm text-red-400">{reportsError}</p> : reports.length === 0 ? <p className="py-10 text-center text-sm text-graphite-500">Сообщений нет</p> : <><div className="mb-3 flex items-center justify-between"><p className="text-xs text-graphite-500">{newOnly ? "Новые сообщения" : `Всего сообщений: ${reports.length}`}</p>{newOnly && <button onClick={() => setNewOnly(false)} className="text-xs text-accent-400 hover:text-accent-300">Показать всю историю</button>}</div><div className="min-h-0 space-y-3 overflow-y-auto">{(newOnly ? reports.filter(report => report.isRead === false).slice(0, 1).length ? reports.filter(report => report.isRead === false).slice(0, 1) : reports.slice(0, 1) : reports).map(report => <article key={report.id} className="rounded-xl border border-graphite-700 bg-graphite-800/70 p-4"><div className="mb-2 flex items-center justify-between gap-3 text-xs text-graphite-500"><span>{new Date(report.createdAt).toLocaleString("ru-RU")}{report.ip ? ` · IP: ${report.ip}` : ""}</span><button onClick={() => setDeleteReport(report)} className="text-red-400 hover:text-red-300">Удалить</button></div><p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-graphite-200">{report.message}</p></article>)}</div></>}</div></div>}
+
+      {deleteReport && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4"><div className="w-full max-w-sm rounded-2xl border border-graphite-700 bg-graphite-900 p-6 shadow-2xl"><h3 className="text-lg font-semibold text-graphite-100">Удалить сообщение?</h3><p className="mt-2 text-sm text-graphite-400">Это действие нельзя отменить.</p><div className="mt-5 flex gap-3"><button onClick={() => setDeleteReport(null)} className="flex-1 rounded-xl border border-graphite-700 bg-graphite-800 py-3 text-graphite-300">Отмена</button><button onClick={confirmDeleteReport} className="flex-1 rounded-xl bg-red-500 py-3 font-medium text-white hover:bg-red-600">Удалить</button></div></div></div>}
 
       {/* Restart Modal */}
       {showRestart && (

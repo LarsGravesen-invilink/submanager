@@ -5,6 +5,7 @@ import {
   subscriptionKeys,
   remoteSources,
   accessLogs,
+  subscriptionReports,
   settings,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth";
@@ -19,6 +20,7 @@ export async function GET() {
   const allKeys = await db.select().from(subscriptionKeys);
   const allSources = await db.select().from(remoteSources);
   const allLogs = await db.select().from(accessLogs);
+  const allReports = await db.select().from(subscriptionReports);
   const allSettings = await db.select().from(settings);
 
   const backup = {
@@ -32,6 +34,7 @@ export async function GET() {
         keys: allKeys.filter((k) => k.subscriptionId === sub.id),
         sources: allSources.filter((s) => s.subscriptionId === sub.id),
         logs: allLogs.filter((l) => l.subscriptionId === sub.id),
+        reports: allReports.filter((r) => r.subscriptionId === sub.id),
       })),
     },
   };

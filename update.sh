@@ -95,6 +95,17 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS total_traffic_gb INTEGER NOT 
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS used_upload_gb INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS used_download_gb INTEGER NOT NULL DEFAULT 0;
 
+CREATE TABLE IF NOT EXISTS subscription_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS subscription_reports_subscription_read_idx
+    ON subscription_reports (subscription_id, is_read);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL DEFAULT ''

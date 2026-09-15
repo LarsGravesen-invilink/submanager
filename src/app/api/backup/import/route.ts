@@ -5,6 +5,7 @@ import {
   subscriptionKeys,
   remoteSources,
   accessLogs,
+  subscriptionReports,
   settings,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth";
@@ -63,6 +64,7 @@ export async function POST(req: Request) {
           keys: subKeys,
           sources: subSources,
           logs: subLogs,
+          reports: subReports,
           ...subData
         } = sub;
 
@@ -144,6 +146,20 @@ export async function POST(req: Request) {
               deviceName: l.deviceName ?? l.device_name ?? "",
               deviceType: l.deviceType ?? l.device_type ?? "",
               accessedAt: new Date(l.accessedAt || l.accessed_at || Date.now()),
+            });
+          }
+        }
+
+        // Restore reports (optional for backward compatibility)
+        if (subReports && Array.isArray(subReports)) {
+          for (const r of subReports) {
+            await db.insert(subscriptionReports).values({
+              id: r.id,
+              subscriptionId: insertData.id,
+              message: r.message,
+              ip: r.ip ?? "unknown",
+              createdAt: new Date(r.createdAt || r.created_at || Date.now()),
+              isRead: r.isRead ?? r.is_read ?? false,
             });
           }
         }

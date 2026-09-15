@@ -33,6 +33,9 @@ export default async function SubscriptionPublicPage({
       isActive={sub.isActive}
       extraConfigsTitle={sub.extraConfigsTitle || ""}
       extraConfigs={(sub.extraConfigs as {name: string; key: string}[]) || []}
+      showTotal={sub.showTotal}
+      totalTrafficGb={sub.totalTrafficGb}
+      whatsNew={sub.whatsNew || ""}
     />
   );
 }

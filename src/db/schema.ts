@@ -6,6 +6,7 @@ import {
   integer,
   uuid,
   json,
+  index,
 } from "drizzle-orm/pg-core";
 
 // Admin user table - first login creates the admin
@@ -41,6 +42,7 @@ export const subscriptions = pgTable("subscriptions", {
   logoUrl: text("logo_url").default(""),
   logoSize: text("logo_size").default("medium"), // 'small' | 'medium' | 'large'
   pageTitle: text("page_title").default(""),
+  whatsNew: text("whats_new").default(""),
   // Client display settings JSON
   // Pause reason & backup keys
   pauseReason: text("pause_reason").default(""),
@@ -101,6 +103,27 @@ export const accessLogs = pgTable("access_logs", {
   deviceType: text("device_type").default(""), // 'browser' | 'vpn_client' | 'router'
   accessedAt: timestamp("accessed_at").defaultNow().notNull(),
 });
+
+// Problem reports submitted for subscriptions
+export const subscriptionReports = pgTable(
+  "subscription_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => subscriptions.id, { onDelete: "cascade" }),
+    message: text("message").notNull(),
+    ip: text("ip").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    isRead: boolean("is_read").notNull().default(false),
+  },
+  (table) => [
+    index("subscription_reports_subscription_read_idx").on(
+      table.subscriptionId,
+      table.isRead
+    ),
+  ]
+);
 
 // Settings (for logo, page title, etc.)
 export const settings = pgTable("settings", {

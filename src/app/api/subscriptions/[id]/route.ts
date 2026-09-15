@@ -8,7 +8,7 @@ import {
   settings,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth";
-import { asc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
 import { filterAliveKeys } from "@/lib/keyHealth";
 
@@ -62,7 +62,7 @@ export async function GET(
     .select()
     .from(accessLogs)
     .where(eq(accessLogs.subscriptionId, id))
-    .orderBy(accessLogs.accessedAt)
+    .orderBy(desc(accessLogs.accessedAt))
     .limit(100);
 
   return NextResponse.json({ ...sub, keys, sources, logs });
@@ -78,9 +78,11 @@ export async function PUT(
   }
 
   const { id } = await params;
-  const body = await req.json();
 
-  const validateKeys = await getSmartValidation();
+  try {
+    const body = await req.json();
+
+    const validateKeys = await getSmartValidation();
 
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
   if (body.name !== undefined) updateData.name = body.name;
@@ -95,8 +97,23 @@ export async function PUT(
   if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl;
   if (body.logoSize !== undefined) updateData.logoSize = body.logoSize;
   if (body.pageTitle !== undefined) updateData.pageTitle = body.pageTitle;
-  if (body.extraConfigsTitle !== undefined) updateData.extraConfigsTitle = body.extraConfigsTitle;
-  if (body.extraConfigs !== undefined) updateData.extraConfigs = body.extraConfigs;
+  if (body.whatsNew !== undefined) updateData.whatsNew = String(body.whatsNew).trim();
+  if (body.extraConfigsTitle !== undefined)
+    updateData.extraConfigsTitle = String(body.extraConfigsTitle).trim();
+  if (body.extraConfigs !== undefined) {
+    if (!Array.isArray(body.extraConfigs)) {
+      return NextResponse.json({ error: "Неверный формат дополнительных конфигов" }, { status: 400 });
+    }
+    updateData.extraConfigs = body.extraConfigs
+      .filter((item: unknown): item is { name: unknown; key: unknown } => {
+        return !!item && typeof item === "object" && "name" in item && "key" in item;
+      })
+      .map((item: { name: unknown; key: unknown }) => ({
+        name: String(item.name ?? "").trim(),
+        key: String(item.key ?? "").trim(),
+      }))
+      .filter((item: { name: string; key: string }) => item.name && item.key);
+  }
   if (body.pauseReason !== undefined) updateData.pauseReason = body.pauseReason;
   if (body.backupKeys !== undefined) updateData.backupKeys = body.backupKeys;
   if (body.showExpiry !== undefined) updateData.showExpiry = body.showExpiry;
@@ -174,7 +191,14 @@ export async function PUT(
     }
   }
 
-  return NextResponse.json(sub);
+    return NextResponse.json(sub);
+  } catch (error) {
+    console.error("Failed to update subscription", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Ошибка сохранения подписки" },
+      { status: 500 }
+    );
+  }
 }
 
 export async function DELETE(

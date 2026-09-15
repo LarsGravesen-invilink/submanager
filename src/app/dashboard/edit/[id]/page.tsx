@@ -37,6 +37,7 @@ interface SubData {
   totalHits: number;
   logoUrl: string;
   pageTitle: string;
+  whatsNew?: string;
   showExpiry?: boolean;
   showUpload?: boolean;
   showDownload?: boolean;
@@ -86,10 +87,12 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
 
   // Logo
   const [logoUrl, setLogoUrl] = useState("");
+  const [initialLogoUrl, setInitialLogoUrl] = useState("");
   const [logoPreview, setLogoPreview] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [pageTitle, setPageTitle] = useState("");
+  const [whatsNew, setWhatsNew] = useState("");
   const [showExpiry, setShowExpiry] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [showDownload, setShowDownload] = useState(false);
@@ -105,6 +108,8 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [addingSource, setAddingSource] = useState(false);
   const [newSources, setNewSources] = useState<RemoteSourceState[]>([]);
   const [keys, setKeys] = useState<SubKey[]>([]);
+  const [initialKeysSignature, setInitialKeysSignature] = useState("");
+  const [initialSourcesSignature, setInitialSourcesSignature] = useState("");
   const [keysExpanded, setKeysExpanded] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -127,8 +132,10 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
       setExpiresAtRaw(new Date(data.expiresAt).toISOString().slice(0, 16));
     }
     setLogoUrl(data.logoUrl || "");
+    setInitialLogoUrl(data.logoUrl || "");
     setLogoPreview(data.logoUrl || "");
     setPageTitle(data.pageTitle || "");
+    setWhatsNew(data.whatsNew || "");
     setShowExpiry(data.showExpiry !== false);
     setShowUpload(data.showUpload === true);
     setShowDownload(data.showDownload === true);
@@ -142,6 +149,8 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
       setExtraConfigs([...(data.extraConfigs || []), {name: "", key: ""}]);
     }
     setKeys(data.keys);
+    setInitialKeysSignature(JSON.stringify(data.keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled }))));
+    setInitialSourcesSignature(JSON.stringify(data.sources.map((s) => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus }))));
   }, [id, router]);
 
   useEffect(() => { loadSub(); }, [loadSub]);
@@ -162,7 +171,24 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => { const r = ev.target?.result as string; setLogoPreview(r); setLogoUrl(r); };
+    reader.onload = (ev) => {
+      const source = ev.target?.result as string;
+      const image = new Image();
+      image.onload = () => {
+        const maxSide = 1200;
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const compressed = canvas.toDataURL("image/jpeg", 0.82);
+        setLogoPreview(compressed);
+        setLogoUrl(compressed);
+      };
+      image.src = source;
+    };
     reader.readAsDataURL(file);
   };
 
@@ -358,34 +384,47 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           isEnabled: true,
         }))
       );
+      const currentKeys = [
+        ...keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled })),
+        ...newSourceKeys,
+      ];
+      const currentSources = [
+        ...sub.sources.map((s) => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus })),
+        ...readyNewSources.map((s) => ({
+          url: s.url,
+          selectedKeys: s.keys.filter((k) => k.selected).map((k) => k.fingerprint),
+          keyNames: Object.fromEntries(s.keys.filter((k) => k.customName.trim()).map((k) => [k.fingerprint, k.customName])),
+          lastStatus: "ok",
+        })),
+      ];
+      const payload: Record<string, unknown> = {
+        name: name.trim(), title: title.trim(), autoUpdateMinutes, clientUpdateHours,
+        expiresAt: calculateExpiryDate(), ...(logoUrl !== initialLogoUrl ? { logoUrl } : {}), pageTitle, whatsNew,
+        showExpiry, showUpload, showDownload, showTotal,
+        totalTrafficGb, usedUploadGb, usedDownloadGb,
+        extraConfigsTitle: enableExtraConfigs ? extraConfigsTitle.trim() : "",
+        extraConfigs: enableExtraConfigs ? extraConfigs
+          .map((c) => ({ name: c.name.trim(), key: c.key.trim() }))
+          .filter((c) => c.name && c.key) : [],
+      };
+      if (JSON.stringify(currentKeys) !== initialKeysSignature) payload.keys = currentKeys;
+      if (JSON.stringify(currentSources) !== initialSourcesSignature) payload.sources = currentSources;
+
       const res = await fetch(`/api/subscriptions/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(), title: title.trim(), autoUpdateMinutes, clientUpdateHours,
-          expiresAt: calculateExpiryDate(), logoUrl, pageTitle,
-          showExpiry, showUpload, showDownload, showTotal,
-          totalTrafficGb, usedUploadGb, usedDownloadGb,
-          extraConfigsTitle: enableExtraConfigs ? extraConfigsTitle : "",
-          extraConfigs: enableExtraConfigs ? extraConfigs.filter(c => c.name.trim() && c.key.trim()) : [],
-          keys: [
-            ...keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled })),
-            ...newSourceKeys,
-          ],
-          sources: [
-            ...sub.sources.map((s) => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus })),
-            ...readyNewSources.map((s) => ({
-              url: s.url,
-              selectedKeys: s.keys.filter((k) => k.selected).map((k) => k.fingerprint),
-              keyNames: Object.fromEntries(s.keys.filter((k) => k.customName.trim()).map((k) => [k.fingerprint, k.customName])),
-              lastStatus: "ok",
-            })),
-          ],
-        }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) router.push("/dashboard");
-      else { const d = await res.json(); setError(d.error || "Ошибка"); }
-    } catch { setError("Ошибка сети"); }
+      else {
+        const text = await res.text();
+        let message = "Ошибка сохранения";
+        try { message = JSON.parse(text).error || message; } catch { if (text) message = text; }
+        setError(message);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка сети");
+    }
     setSaving(false);
   };
 
@@ -398,8 +437,8 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   if (!sub) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
-    <div className="min-h-screen bg-graphite-950">
-      <header className="sticky top-0 z-50 bg-graphite-950/80 backdrop-blur-xl border-b border-graphite-800">
+    <div className="h-svh max-h-svh bg-graphite-950 flex flex-col overflow-hidden overscroll-none">
+      <header className="shrink-0 z-40 bg-graphite-950/80 backdrop-blur-xl border-b border-graphite-800">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 text-graphite-400 hover:text-graphite-200 transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>Назад
@@ -409,7 +448,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {/* Link */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
           <div className="flex flex-col sm:flex-row gap-2">
@@ -629,6 +668,23 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
             </div>
           </div>
           <div><label className="block text-sm text-graphite-400 mb-1.5">Заголовок страницы</label><input value={pageTitle} onChange={(e) => setPageTitle(e.target.value)} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50 text-sm" /></div>
+        </section>
+
+        {/* Public changelog */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
+          <h2 className="text-lg font-semibold text-graphite-100 mb-2">Что нового?</h2>
+          <p className="text-graphite-500 text-sm mb-4">Текст для модального окна на публичной странице подписки</p>
+          <textarea
+            value={whatsNew}
+            onChange={(e) => setWhatsNew(e.target.value)}
+            onInput={(e) => {
+              e.currentTarget.style.height = "auto";
+              e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+            }}
+            rows={3}
+            className="w-full min-h-24 max-h-80 overflow-y-auto resize-none bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-sm leading-relaxed text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/50"
+            placeholder="Пока изменений нет, но в скором времени могут появиться."
+          />
         </section>
 
         {/* Client display */}
