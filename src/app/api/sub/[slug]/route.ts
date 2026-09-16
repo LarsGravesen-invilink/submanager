@@ -98,9 +98,11 @@ export async function GET(
     : detectDeviceType(ua);
   const routerName = /openwrt/i.test(ua)
     ? "OpenWRT"
-    : /sing-box/i.test(ua)
-      ? "sing-box"
-      : null;
+    : /podkop/i.test(ua)
+      ? "Podkop"
+      : /forkop/i.test(ua)
+        ? "ForKop"
+        : null;
   const deviceName = routerName ?? detectedDeviceName;
   const deviceType = routerName ? "router" : "vpn_client";
   const isBrowser = !forceRaw && isLikelyBrowser(ua);

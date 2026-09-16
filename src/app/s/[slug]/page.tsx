@@ -23,26 +23,15 @@ export default async function SubscriptionPublicPage({
     notFound();
   }
 
-  const [[latestClientAccess], [latestRouterAccess]] = await Promise.all([
-    db
-      .select({ accessedAt: accessLogs.accessedAt })
-      .from(accessLogs)
-      .where(and(
-        eq(accessLogs.subscriptionId, sub.id),
-        eq(accessLogs.deviceType, "vpn_client")
-      ))
-      .orderBy(desc(accessLogs.accessedAt))
-      .limit(1),
-    db
-      .select({ accessedAt: accessLogs.accessedAt })
-      .from(accessLogs)
-      .where(and(
-        eq(accessLogs.subscriptionId, sub.id),
-        eq(accessLogs.deviceType, "router")
-      ))
-      .orderBy(desc(accessLogs.accessedAt))
-      .limit(1),
-  ]);
+  const [latestClientAccess] = await db
+    .select({ accessedAt: accessLogs.accessedAt })
+    .from(accessLogs)
+    .where(and(
+      eq(accessLogs.subscriptionId, sub.id),
+      eq(accessLogs.deviceType, "vpn_client")
+    ))
+    .orderBy(desc(accessLogs.accessedAt))
+    .limit(1);
 
   return (
     <SubPageClient
@@ -58,7 +47,6 @@ export default async function SubscriptionPublicPage({
       totalTrafficGb={sub.totalTrafficGb}
       whatsNew={sub.whatsNew || ""}
       lastClientUpdate={latestClientAccess?.accessedAt.toISOString() ?? null}
-      lastRouterUpdate={latestRouterAccess?.accessedAt.toISOString() ?? null}
     />
   );
 }

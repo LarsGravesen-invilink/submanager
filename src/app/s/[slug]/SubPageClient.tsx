@@ -11,6 +11,8 @@ interface VpnClient {
   urlScheme: (subUrl: string) => string;
 }
 
+const isAmneziaConfig = (key: string) => /^[\s\u180E\u200B-\u200D\u2060\uFEFF]*vpn:\/\//i.test(key);
+
 const VPN_CLIENTS: VpnClient[] = [
   {
     name: "Incy",
@@ -67,7 +69,6 @@ export default function SubPageClient({
   totalTrafficGb,
   whatsNew,
   lastClientUpdate,
-  lastRouterUpdate,
 }: {
   slug: string;
   title: string;
@@ -81,7 +82,6 @@ export default function SubPageClient({
   totalTrafficGb: number;
   whatsNew: string;
   lastClientUpdate: string | null;
-  lastRouterUpdate: string | null;
 }) {
   const [subUrl, setSubUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -368,11 +368,10 @@ export default function SubPageClient({
     : null;
   const formattedLastClientUpdate = formatUpdateTime(lastClientUpdate);
   const lastUpdateColor = getUpdateColor(lastUpdateAgeHours);
-  const lastRouterUpdateAgeHours = lastRouterUpdate
-    ? (Date.now() - new Date(lastRouterUpdate).getTime()) / 3_600_000
-    : null;
-  const formattedLastRouterUpdate = formatUpdateTime(lastRouterUpdate);
-  const lastRouterUpdateColor = getUpdateColor(lastRouterUpdateAgeHours);
+  const amneziaConfigCount = extraConfigs.filter((config) => isAmneziaConfig(config.key)).length;
+  const mainExtraConfigIsAmnezia = amneziaConfigCount === 1 || (
+    extraConfigs.length > 0 && amneziaConfigCount === extraConfigs.length
+  );
 
   // Paused subscription
   if (!isActive) {
@@ -526,16 +525,8 @@ export default function SubPageClient({
             <div className={`text-xs ${lastUpdateColor}`}>
               Обновлено в клиенте: {formattedLastClientUpdate}
             </div>
-            {lastRouterUpdate && (
-              <div className={`text-xs ${lastRouterUpdateColor}`}>
-                Обновлено на роутере: {formattedLastRouterUpdate}
-              </div>
-            )}
             {lastUpdateAgeHours !== null && lastUpdateAgeHours > 24 && (
               <div className="text-[10px] text-red-400">(требуется обновить подписку в клиенте)</div>
-            )}
-            {lastRouterUpdateAgeHours !== null && lastRouterUpdateAgeHours > 24 && (
-              <div className="text-[10px] text-red-400">(требуется обновить подписку на роутере)</div>
             )}
           </div>
           {(!expiresAt || (showTotal && totalTrafficGb > 0)) && (
@@ -614,11 +605,27 @@ export default function SubPageClient({
             className="mt-4 w-full flex items-center justify-between rounded-2xl border border-white/[0.08] bg-[#131417] hover:bg-white/[0.03] hover:border-[#F0B900]/40 p-5 text-left transition-colors"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-[#F0B900]/10 border border-[#F0B900]/20 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+              <div
+                className="w-10 h-10 rounded-xl bg-[#202124] border border-white/10 flex items-center justify-center flex-shrink-0 overflow-hidden select-none"
+                onContextMenu={(event) => event.preventDefault()}
+                onDragStart={(event) => event.preventDefault()}
+              >
+                {mainExtraConfigIsAmnezia ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src="/amneziawg.webp"
+                    alt="AmneziaWG"
+                    width={96}
+                    height={96}
+                    draggable={false}
+                    className="w-10 h-10 object-contain pointer-events-none select-none"
+                  />
+                ) : (
+                  <svg className="w-5 h-5 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                )}
               </div>
               <div className="min-w-0">
                  <span className="text-sm font-semibold text-white block">{extraConfigsTitle || "Дополнительные конфиги"}</span>
@@ -799,11 +806,11 @@ export default function SubPageClient({
                       className="w-full flex items-center gap-3 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-[#F0B900]/50 rounded-xl p-4 transition-all text-left"
                     >
                       <div
-                        className="w-8 h-8 rounded-lg bg-[#F0B900]/10 border border-[#F0B900]/20 flex items-center justify-center flex-shrink-0 overflow-hidden select-none"
+                        className="w-8 h-8 rounded-lg bg-[#202124] border border-white/10 flex items-center justify-center flex-shrink-0 overflow-hidden select-none"
                         onContextMenu={(event) => event.preventDefault()}
                         onDragStart={(event) => event.preventDefault()}
                       >
-                        {cfg.key.trim().toLowerCase().startsWith("vpn://") ? (
+                        {isAmneziaConfig(cfg.key) ? (
                           /* eslint-disable-next-line @next/next/no-img-element */
                           <img
                             src="/amneziawg.webp"
@@ -811,7 +818,7 @@ export default function SubPageClient({
                             width={96}
                             height={96}
                             draggable={false}
-                            className="w-full h-full rounded-lg object-cover mix-blend-lighten pointer-events-none select-none"
+                            className="w-8 h-8 rounded-lg object-contain pointer-events-none select-none"
                           />
                         ) : (
                           <svg className="w-4 h-4 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -835,7 +842,7 @@ export default function SubPageClient({
                     onClick={openSelectedExtraConfig}
                     className="w-full flex items-center justify-between gap-3 rounded-xl bg-[#F0B900] hover:bg-[#E0A700] text-[#0B0B0E] px-4 py-3.5 font-bold transition-colors"
                   >
-                    <span>{selectedExtraConfig.key.trim().toLowerCase().startsWith("vpn://") ? "Открыть в AmneziaWG" : "Открыть"}</span>
+                     <span>{isAmneziaConfig(selectedExtraConfig.key) ? "Открыть в AmneziaWG" : "Открыть"}</span>
                     <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M4 12h16" />
                     </svg>
@@ -856,10 +863,10 @@ export default function SubPageClient({
                       </div>
                     )}
                   </div>
-                  {selectedExtraConfig.key.trim().toLowerCase().startsWith("vpn://") ? (
-                    <div className="flex min-h-28 overflow-hidden rounded-xl border border-[#F0B900]/30 bg-[#F0B900]/10 text-sm leading-relaxed text-white/85">
+                  {isAmneziaConfig(selectedExtraConfig.key) ? (
+                    <div className="flex flex-col min-[360px]:flex-row gap-3 min-h-28 overflow-hidden rounded-xl border border-[#F0B900]/30 bg-[#F0B900]/10 p-3 text-sm leading-relaxed text-white/85">
                       <div
-                        className="w-24 flex-shrink-0 self-stretch select-none"
+                        className="w-24 h-24 flex-none self-center overflow-hidden rounded-xl bg-[#202124] select-none"
                         onContextMenu={(event) => event.preventDefault()}
                         onDragStart={(event) => event.preventDefault()}
                       >
@@ -870,10 +877,10 @@ export default function SubPageClient({
                           width={96}
                           height={96}
                           draggable={false}
-                          className="h-full w-full object-cover mix-blend-lighten pointer-events-none select-none"
+                          className="w-24 h-24 object-contain pointer-events-none select-none"
                         />
                       </div>
-                      <div className="px-4 py-3">
+                      <div className="min-w-0 self-center">
                         Конфигурация AmneziaWG используется строго на одном устройстве в приложении &quot;Amnezia VPN&quot; и является индивидуальной, если планируется использовать несколько устройств, необходимо добавлять индивидуальные конфигурации на каждое устройство отдельно!
                       </div>
                     </div>

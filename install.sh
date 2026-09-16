@@ -316,13 +316,19 @@ END $$;
 CREATE INDEX IF NOT EXISTS access_logs_subscription_device_accessed_idx
     ON access_logs (subscription_id, device_type, accessed_at DESC);
 UPDATE access_logs
+SET device_type = 'vpn_client',
+    device_name = 'sing-box'
+WHERE device_type = 'router'
+  AND user_agent ~* 'sing-box'
+  AND user_agent !~* 'openwrt|podkop|forkop';
+UPDATE access_logs
 SET device_type = 'router',
     device_name = CASE
         WHEN user_agent ~* 'openwrt' THEN 'OpenWRT'
-        ELSE 'sing-box'
+        WHEN user_agent ~* 'podkop' THEN 'Podkop'
+        ELSE 'ForKop'
     END
-WHERE device_type = 'vpn_client'
-  AND (user_agent ~* 'openwrt' OR user_agent ~* 'sing-box');
+WHERE user_agent ~* 'openwrt|podkop|forkop';
 EOMIGRATE
 
 echo -e "  ${GREEN}✓${NC} База данных настроена"
