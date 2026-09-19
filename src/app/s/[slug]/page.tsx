@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { accessLogs, subscriptionReports, subscriptions } from "@/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import SubPageClient from "./SubPageClient";
 
@@ -23,7 +23,7 @@ export default async function SubscriptionPublicPage({
     notFound();
   }
 
-  const [[latestClientAccess], [latestRenewal]] = await Promise.all([
+  const [[latestClientAccess], [latestRenewal], [clock]] = await Promise.all([
     db
       .select({ accessedAt: accessLogs.accessedAt })
       .from(accessLogs)
@@ -34,7 +34,9 @@ export default async function SubscriptionPublicPage({
       .orderBy(desc(accessLogs.accessedAt))
       .limit(1),
     db
-      .select({ createdAt: subscriptionReports.createdAt })
+      .select({
+        retryAt: sql<string>`to_json(${subscriptionReports.createdAt} + interval '3 hours') #>> '{}'`,
+      })
       .from(subscriptionReports)
       .where(and(
         eq(subscriptionReports.subscriptionId, sub.id),
@@ -42,12 +44,15 @@ export default async function SubscriptionPublicPage({
       ))
       .orderBy(desc(subscriptionReports.createdAt))
       .limit(1),
+    db
+      .select({ serverNow: sql<string>`to_json(now()) #>> '{}'` })
+      .from(subscriptions)
+      .where(eq(subscriptions.id, sub.id))
+      .limit(1),
   ]);
 
-  const isExpired = sub.expiresAt !== null && sub.expiresAt.getTime() <= Date.now();
-  const renewalRetryAt = latestRenewal
-    ? new Date(latestRenewal.createdAt.getTime() + 3 * 60 * 60 * 1000).toISOString()
-    : null;
+  const serverNow = clock.serverNow;
+  const isExpired = sub.expiresAt !== null && sub.expiresAt.getTime() <= new Date(serverNow).getTime();
 
   return (
     <SubPageClient
@@ -65,7 +70,8 @@ export default async function SubscriptionPublicPage({
       totalTrafficGb={sub.totalTrafficGb}
       whatsNew={sub.whatsNew || ""}
       lastClientUpdate={latestClientAccess?.accessedAt.toISOString() ?? null}
-      renewalRetryAt={renewalRetryAt}
+      renewalRetryAt={latestRenewal?.retryAt ?? null}
+      serverNow={serverNow}
     />
   );
 }

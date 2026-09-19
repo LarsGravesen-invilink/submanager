@@ -7,6 +7,8 @@ import { v4 as uuidv4 } from "uuid";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
 import { filterAliveKeys } from "@/lib/keyHealth";
 
+export const dynamic = "force-dynamic";
+
 async function getSmartValidation(): Promise<boolean> {
   try {
     const [row] = await db
@@ -45,10 +47,11 @@ export async function GET() {
   return NextResponse.json(
     subs.map(({ subscription, unreadReportCount, unreadOrdinaryCount, unreadRenewalCount }) => ({
       ...subscription,
-      unreadReportCount,
-      unreadOrdinaryCount,
-      unreadRenewalCount,
-    }))
+      unreadReportCount: Number(unreadReportCount),
+      unreadOrdinaryCount: Number(unreadOrdinaryCount),
+      unreadRenewalCount: Number(unreadRenewalCount),
+    })),
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
   );
 }
 

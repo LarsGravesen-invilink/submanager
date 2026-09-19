@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS subscription_reports (
     message TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'ordinary' CHECK (type IN ('ordinary', 'renewal')),
     ip TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     is_read BOOLEAN NOT NULL DEFAULT FALSE
 );
 
@@ -86,6 +86,8 @@ CREATE INDEX IF NOT EXISTS subscription_reports_subscription_read_idx
     ON subscription_reports (subscription_id, is_read);
 CREATE INDEX IF NOT EXISTS subscription_reports_subscription_type_idx
     ON subscription_reports (subscription_id, type);
+CREATE INDEX IF NOT EXISTS subscription_reports_latest_renewal_idx
+    ON subscription_reports (subscription_id, created_at DESC) WHERE type = 'renewal';
 DROP INDEX IF EXISTS subscription_reports_outstanding_renewal_idx;
 
 CREATE TABLE IF NOT EXISTS settings (

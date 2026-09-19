@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   text,
@@ -127,7 +128,7 @@ export const subscriptionReports = pgTable(
     message: text("message").notNull(),
     type: text("type").$type<"ordinary" | "renewal">().notNull().default("ordinary"),
     ip: text("ip").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     isRead: boolean("is_read").notNull().default(false),
   },
   (table) => [
@@ -139,6 +140,9 @@ export const subscriptionReports = pgTable(
       table.subscriptionId,
       table.type
     ),
+    index("subscription_reports_latest_renewal_idx")
+      .on(table.subscriptionId, table.createdAt.desc())
+      .where(sql`${table.type} = 'renewal'`),
   ]
 );
 

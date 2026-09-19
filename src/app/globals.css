@@ -298,7 +298,11 @@ body:has(.sub-public-state) {
 }
 
 .sub-public-state-expired .sub-public-state-content {
-  margin-inline: auto;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(28rem, calc(100% - 24px));
+  transform: translate(-50%, -50%);
 }
 
 .sub-renewal-button {
@@ -330,7 +334,8 @@ body:has(.sub-public-state) {
 
 @media (max-width: 639px) {
   .sub-public-state-expired .sub-public-state-content {
-    transform: translateY(clamp(-20px, -3svh, -10px));
+    top: 44%;
+    transform: translate(-50%, -50%);
   }
 }
 

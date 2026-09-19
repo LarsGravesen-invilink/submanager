@@ -71,6 +71,7 @@ export default function SubPageClient({
   whatsNew,
   lastClientUpdate,
   renewalRetryAt,
+  serverNow,
 }: {
   slug: string;
   title: string;
@@ -86,6 +87,7 @@ export default function SubPageClient({
   whatsNew: string;
   lastClientUpdate: string | null;
   renewalRetryAt: string | null;
+  serverNow: string;
 }) {
   const [subUrl, setSubUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -168,10 +170,15 @@ export default function SubPageClient({
   const [reportMessage, setReportMessage] = useState("");
   const [reportStatus, setReportStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [renewalStatus, setRenewalStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
-  const [renewalRetryAtState, setRenewalRetryAtState] = useState(renewalRetryAt);
-  const [renewalSecondsLeft, setRenewalSecondsLeft] = useState(() => renewalRetryAt
-    ? Math.max(0, Math.ceil((new Date(renewalRetryAt).getTime() - Date.now()) / 1000))
-    : 0);
+  const initialServerNow = new Date(serverNow).getTime();
+  const initialRetryAt = renewalRetryAt ? new Date(renewalRetryAt).getTime() : 0;
+  const [renewalRetryAtState, setRenewalRetryAtState] = useState(
+    initialRetryAt > initialServerNow ? renewalRetryAt : null
+  );
+  const [serverClockOffset, setServerClockOffset] = useState(initialServerNow - Date.now());
+  const [renewalSecondsLeft, setRenewalSecondsLeft] = useState(() =>
+    initialRetryAt > initialServerNow ? Math.ceil((initialRetryAt - initialServerNow) / 1000) : 0
+  );
   const [clientTimeZone, setClientTimeZone] = useState("Europe/Moscow");
   const [pullDistance, setPullDistance] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -192,16 +199,31 @@ export default function SubPageClient({
   }, []);
 
   useEffect(() => {
+    const nextServerNow = new Date(serverNow).getTime();
+    const nextRetryAt = renewalRetryAt ? new Date(renewalRetryAt).getTime() : 0;
+    if (!Number.isFinite(nextServerNow)) return;
+
+    setServerClockOffset(nextServerNow - Date.now());
+    setRenewalRetryAtState(nextRetryAt > nextServerNow ? renewalRetryAt : null);
+    setRenewalSecondsLeft(nextRetryAt > nextServerNow ? Math.ceil((nextRetryAt - nextServerNow) / 1000) : 0);
+  }, [renewalRetryAt, serverNow]);
+
+  useEffect(() => {
     const updateCooldown = () => {
-      const retryTime = renewalRetryAtState ? new Date(renewalRetryAtState).getTime() : 0;
-      const seconds = Math.max(0, Math.ceil((retryTime - Date.now()) / 1000));
+      if (!renewalRetryAtState) {
+        setRenewalSecondsLeft(0);
+        return;
+      }
+      const retryTime = new Date(renewalRetryAtState).getTime();
+      if (!Number.isFinite(retryTime)) return;
+      const seconds = Math.max(0, Math.ceil((retryTime - (Date.now() + serverClockOffset)) / 1000));
       setRenewalSecondsLeft(seconds);
-      if (seconds === 0 && renewalRetryAtState) setRenewalRetryAtState(null);
+      if (seconds === 0) setRenewalRetryAtState(null);
     };
     updateCooldown();
     const interval = window.setInterval(updateCooldown, 1000);
     return () => window.clearInterval(interval);
-  }, [renewalRetryAtState]);
+  }, [renewalRetryAtState, serverClockOffset]);
 
   const submitReport = async () => {
     const message = reportMessage.trim();
@@ -231,9 +253,14 @@ export default function SubPageClient({
         body: JSON.stringify({ type: "renewal" }),
       });
       if (!response.ok) throw new Error();
-      const data: { retryAt?: unknown } = await response.json();
-      if (typeof data.retryAt !== "string" || Number.isNaN(new Date(data.retryAt).getTime())) throw new Error();
+      const data: { retryAt?: unknown; serverNow?: unknown } = await response.json();
+      if (typeof data.retryAt !== "string" || typeof data.serverNow !== "string") throw new Error();
+      const retryTime = new Date(data.retryAt).getTime();
+      const responseServerNow = new Date(data.serverNow).getTime();
+      if (!Number.isFinite(retryTime) || !Number.isFinite(responseServerNow) || retryTime <= responseServerNow) throw new Error();
+      setServerClockOffset(responseServerNow - Date.now());
       setRenewalRetryAtState(data.retryAt);
+      setRenewalSecondsLeft(Math.ceil((retryTime - responseServerNow) / 1000));
       setRenewalStatus("success");
       window.setTimeout(() => setRenewalStatus("idle"), 1500);
     } catch {
@@ -470,7 +497,7 @@ export default function SubPageClient({
           className="sub-public-state-glow"
           style={{ background: "radial-gradient(circle at center, rgba(248,113,113,0.11), transparent 66%)" }}
         />
-        <div className="sub-public-state-content text-center b-anim">
+        <div className="sub-public-state-content text-center">
           <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center">
             <svg className="w-14 h-14 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />

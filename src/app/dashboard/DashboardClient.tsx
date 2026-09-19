@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 interface Subscription {
@@ -53,24 +53,56 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   const [deleteReport, setDeleteReport] = useState<Report | null>(null);
   const pauseInputRef = { current: null as HTMLInputElement | null };
   const router = useRouter();
+  const subsRequestRef = useRef({ inFlight: false, lastStartedAt: 0, sequence: 0 });
+  const dashboardMountedRef = useRef(true);
 
-  const loadSubs = useCallback(async () => {
+  const loadSubs = useCallback(async (force = true) => {
+    const requestState = subsRequestRef.current;
+    const now = Date.now();
+    if (requestState.inFlight || (!force && now - requestState.lastStartedAt < 10_000)) return;
+    requestState.inFlight = true;
+    requestState.lastStartedAt = now;
+    const sequence = ++requestState.sequence;
     try {
-      const res = await fetch("/api/subscriptions");
+      const res = await fetch("/api/subscriptions", { cache: "no-store" });
       if (res.status === 401) {
         router.push("/");
         return;
       }
-      const data = await res.json();
-      setSubs(data);
+      if (!res.ok) throw new Error(`Subscriptions request failed: ${res.status}`);
+      const data: unknown = await res.json();
+      if (!Array.isArray(data)) throw new Error("Subscriptions response is not an array");
+      if (dashboardMountedRef.current && sequence === subsRequestRef.current.sequence) {
+        setSubs(data as Subscription[]);
+      }
     } catch {
-      // ignore
+      // Keep the last successful subscription snapshot visible.
+    } finally {
+      requestState.inFlight = false;
+      if (dashboardMountedRef.current) setLoading(false);
     }
-    setLoading(false);
   }, [router]);
 
   useEffect(() => {
-    loadSubs();
+    dashboardMountedRef.current = true;
+    void loadSubs();
+    return () => {
+      dashboardMountedRef.current = false;
+    };
+  }, [loadSubs]);
+
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") void loadSubs(false);
+    };
+    window.addEventListener("focus", refreshIfVisible);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    const interval = window.setInterval(refreshIfVisible, 10_000);
+    return () => {
+      window.removeEventListener("focus", refreshIfVisible);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+      window.clearInterval(interval);
+    };
   }, [loadSubs]);
 
   // Live system info polling

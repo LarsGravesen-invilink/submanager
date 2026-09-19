@@ -110,20 +110,40 @@ CREATE TABLE IF NOT EXISTS subscription_reports (
     message TEXT NOT NULL,
     type TEXT NOT NULL DEFAULT 'ordinary' CHECK (type IN ('ordinary', 'renewal')),
     ip TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     is_read BOOLEAN NOT NULL DEFAULT FALSE
 );
 ALTER TABLE subscription_reports ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'ordinary';
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscription_reports_type_check') THEN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'subscription_reports_type_check'
+          AND conrelid = 'subscription_reports'::regclass
+    ) THEN
         ALTER TABLE subscription_reports ADD CONSTRAINT subscription_reports_type_check CHECK (type IN ('ordinary', 'renewal'));
+    END IF;
+END $$;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'subscription_reports'
+          AND column_name = 'created_at'
+          AND data_type = 'timestamp without time zone'
+    ) THEN
+        ALTER TABLE subscription_reports
+            ALTER COLUMN created_at TYPE TIMESTAMPTZ
+            USING created_at AT TIME ZONE 'Europe/Moscow';
     END IF;
 END $$;
 CREATE INDEX IF NOT EXISTS subscription_reports_subscription_read_idx
     ON subscription_reports (subscription_id, is_read);
 CREATE INDEX IF NOT EXISTS subscription_reports_subscription_type_idx
     ON subscription_reports (subscription_id, type);
+CREATE INDEX IF NOT EXISTS subscription_reports_latest_renewal_idx
+    ON subscription_reports (subscription_id, created_at DESC) WHERE type = 'renewal';
 DROP INDEX IF EXISTS subscription_reports_outstanding_renewal_idx;
 
 CREATE TABLE IF NOT EXISTS settings (
