@@ -334,7 +334,7 @@ body:has(.sub-public-state) {
 
 @media (max-width: 639px) {
   .sub-public-state-expired .sub-public-state-content {
-    top: 44%;
+    top: 36%;
     transform: translate(-50%, -50%);
   }
 }

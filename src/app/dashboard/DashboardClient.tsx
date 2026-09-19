@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type TouchEvent } from "react";
 import { useRouter } from "next/navigation";
 
 interface Subscription {
@@ -55,6 +55,11 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   const router = useRouter();
   const subsRequestRef = useRef({ inFlight: false, lastStartedAt: 0, sequence: 0 });
   const dashboardMountedRef = useRef(true);
+  const mainScrollRef = useRef<HTMLElement>(null);
+  const pullStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pullDistanceRef = useRef(0);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
 
   const loadSubs = useCallback(async (force = true) => {
     const requestState = subsRequestRef.current;
@@ -130,6 +135,43 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
       clearInterval(interval);
     };
   }, []);
+
+  const handlePullStart = (event: TouchEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (event.touches.length !== 1 || mainScrollRef.current?.scrollTop !== 0 || target.closest("button, a, input, textarea, select, [role='button']")) {
+      pullStartRef.current = null;
+      return;
+    }
+    const touch = event.touches[0];
+    pullStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handlePullMove = (event: TouchEvent<HTMLElement>) => {
+    const start = pullStartRef.current;
+    if (!start || event.touches.length !== 1 || (mainScrollRef.current?.scrollTop ?? 0) > 0 || pullRefreshing) return;
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (deltaY <= 8 || Math.abs(deltaX) >= deltaY * 0.65) {
+      if (Math.abs(deltaX) > 10 || deltaY < -4) pullStartRef.current = null;
+      return;
+    }
+    event.preventDefault();
+    const distance = Math.min(104, deltaY * 0.45);
+    pullDistanceRef.current = distance;
+    setPullDistance(distance);
+  };
+
+  const handlePullEnd = async () => {
+    const shouldRefresh = pullDistanceRef.current >= 68 && !pullRefreshing;
+    pullStartRef.current = null;
+    pullDistanceRef.current = 0;
+    setPullDistance(0);
+    if (!shouldRefresh) return;
+    setPullRefreshing(true);
+    await loadSubs(true);
+    setPullRefreshing(false);
+  };
 
   const getSubUrl = (slug: string) => `${window.location.origin}/api/sub/${slug}`;
 
@@ -312,7 +354,25 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain max-w-[1600px] w-full mx-auto px-4 sm:px-8 lg:px-10 py-6 sm:py-10">
+      <main
+        ref={mainScrollRef}
+        className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain max-w-[1600px] w-full mx-auto px-4 sm:px-8 lg:px-10 py-6 sm:py-10"
+        onTouchStart={handlePullStart}
+        onTouchMove={handlePullMove}
+        onTouchEnd={handlePullEnd}
+        onTouchCancel={handlePullEnd}
+      >
+        {(pullDistance > 0 || pullRefreshing) && (
+          <div
+            className="pointer-events-none sticky top-0 z-30 mx-auto -mb-8 flex h-8 w-8 items-center justify-center rounded-full border border-accent-500/30 bg-graphite-900/95 text-accent-400 shadow-lg shadow-accent-500/10 backdrop-blur"
+            style={{ opacity: pullRefreshing ? 1 : Math.min(1, pullDistance / 36) }}
+            aria-hidden="true"
+          >
+            <svg className={`h-4 w-4 ${pullRefreshing ? "animate-spin" : pullDistance >= 68 ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" />
+            </svg>
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h2 className="text-2xl font-bold text-graphite-50">Подписки</h2>
