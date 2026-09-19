@@ -140,6 +140,18 @@ body {
   animation: bMarqueeRev 16s linear infinite;
 }
 
+.b-marquee-zone-text {
+  color: transparent;
+  background-image: linear-gradient(90deg, #9ca3af 0%, #b8b9b5 18%, #e0b522 38%, #f0b900 50%, #e0b522 62%, #b8b9b5 82%, #9ca3af 100%);
+  background-size: 100vw 100%;
+  background-position: left center;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 /* Beeline arrow button — label scrolls up on hover, arrow slides right */
 .btn-beeline {
   position: relative;

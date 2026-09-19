@@ -542,18 +542,18 @@ export default function SubPageClient({
       {/* ===== Fixed scrolling stripes (top / bottom) ===== */}
       <div className="fixed top-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] overflow-hidden select-none pt-[max(env(safe-area-inset-top),8px)] pb-2">
         <div className="b-marquee text-[9px] font-medium tracking-[0.2em]">
-          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента.</span>
-          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента.</span>
-          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента.</span>
-          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента.</span>
+          <span className="b-marquee-zone-text pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента. | Developed by LarsGravesen |</span>
+          <span className="b-marquee-zone-text pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента. | Developed by LarsGravesen |</span>
+          <span className="b-marquee-zone-text pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента. | Developed by LarsGravesen |</span>
+          <span className="b-marquee-zone-text pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента. | Developed by LarsGravesen |</span>
         </div>
       </div>
       <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none bg-[#0B0B0E]/70 backdrop-blur-[2px] overflow-hidden select-none pt-2 pb-[max(env(safe-area-inset-bottom),8px)]">
         <div className="b-marquee-rev text-[9px] font-medium tracking-[0.2em]">
-          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента.</span>
-          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента.</span>
-          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента.</span>
-          <span className="bg-gradient-to-r from-[#3c3c41] to-[#c9a000] bg-clip-text text-transparent pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента.</span>
+          <span className="b-marquee-zone-text pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента. | Developed by LarsGravesen |</span>
+          <span className="b-marquee-zone-text pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента. | Developed by LarsGravesen |</span>
+          <span className="b-marquee-zone-text pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента. | Developed by LarsGravesen |</span>
+          <span className="b-marquee-zone-text pr-14">inviLink - сетевые технологии | Ваша подписка для VPN клиента. | Developed by LarsGravesen |</span>
         </div>
       </div>
 
@@ -749,10 +749,7 @@ export default function SubPageClient({
           </div>
         )}
 
-        <p className="text-center text-graphite-700 text-xs mt-8 mb-3">
-          SubManager by LarsGravesen
-        </p>
-        <div className="space-y-2">
+        <div className="mt-4 space-y-2">
           {hasWhatsNew && (
             <button
               onClick={() => setShowWhatsNew(true)}
