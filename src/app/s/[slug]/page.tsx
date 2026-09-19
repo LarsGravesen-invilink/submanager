@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { accessLogs, subscriptions } from "@/db/schema";
+import { accessLogs, subscriptionReports, subscriptions } from "@/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import SubPageClient from "./SubPageClient";
@@ -23,17 +23,31 @@ export default async function SubscriptionPublicPage({
     notFound();
   }
 
-  const [latestClientAccess] = await db
-    .select({ accessedAt: accessLogs.accessedAt })
-    .from(accessLogs)
-    .where(and(
-      eq(accessLogs.subscriptionId, sub.id),
-      eq(accessLogs.deviceType, "vpn_client")
-    ))
-    .orderBy(desc(accessLogs.accessedAt))
-    .limit(1);
+  const [[latestClientAccess], [latestRenewal]] = await Promise.all([
+    db
+      .select({ accessedAt: accessLogs.accessedAt })
+      .from(accessLogs)
+      .where(and(
+        eq(accessLogs.subscriptionId, sub.id),
+        eq(accessLogs.deviceType, "vpn_client")
+      ))
+      .orderBy(desc(accessLogs.accessedAt))
+      .limit(1),
+    db
+      .select({ createdAt: subscriptionReports.createdAt })
+      .from(subscriptionReports)
+      .where(and(
+        eq(subscriptionReports.subscriptionId, sub.id),
+        eq(subscriptionReports.type, "renewal")
+      ))
+      .orderBy(desc(subscriptionReports.createdAt))
+      .limit(1),
+  ]);
 
   const isExpired = sub.expiresAt !== null && sub.expiresAt.getTime() <= Date.now();
+  const renewalRetryAt = latestRenewal
+    ? new Date(latestRenewal.createdAt.getTime() + 3 * 60 * 60 * 1000).toISOString()
+    : null;
 
   return (
     <SubPageClient
@@ -51,6 +65,7 @@ export default async function SubscriptionPublicPage({
       totalTrafficGb={sub.totalTrafficGb}
       whatsNew={sub.whatsNew || ""}
       lastClientUpdate={latestClientAccess?.accessedAt.toISOString() ?? null}
+      renewalRetryAt={renewalRetryAt}
     />
   );
 }

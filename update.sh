@@ -124,8 +124,7 @@ CREATE INDEX IF NOT EXISTS subscription_reports_subscription_read_idx
     ON subscription_reports (subscription_id, is_read);
 CREATE INDEX IF NOT EXISTS subscription_reports_subscription_type_idx
     ON subscription_reports (subscription_id, type);
-CREATE UNIQUE INDEX IF NOT EXISTS subscription_reports_outstanding_renewal_idx
-    ON subscription_reports (subscription_id) WHERE type = 'renewal';
+DROP INDEX IF EXISTS subscription_reports_outstanding_renewal_idx;
 
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,

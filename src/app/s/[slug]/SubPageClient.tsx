@@ -70,6 +70,7 @@ export default function SubPageClient({
   totalTrafficGb,
   whatsNew,
   lastClientUpdate,
+  renewalRetryAt,
 }: {
   slug: string;
   title: string;
@@ -84,6 +85,7 @@ export default function SubPageClient({
   totalTrafficGb: number;
   whatsNew: string;
   lastClientUpdate: string | null;
+  renewalRetryAt: string | null;
 }) {
   const [subUrl, setSubUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -166,6 +168,10 @@ export default function SubPageClient({
   const [reportMessage, setReportMessage] = useState("");
   const [reportStatus, setReportStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [renewalStatus, setRenewalStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [renewalRetryAtState, setRenewalRetryAtState] = useState(renewalRetryAt);
+  const [renewalSecondsLeft, setRenewalSecondsLeft] = useState(() => renewalRetryAt
+    ? Math.max(0, Math.ceil((new Date(renewalRetryAt).getTime() - Date.now()) / 1000))
+    : 0);
   const [clientTimeZone, setClientTimeZone] = useState("Europe/Moscow");
   const [pullDistance, setPullDistance] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -184,6 +190,18 @@ export default function SubPageClient({
       setClientTimeZone("Europe/Moscow");
     }
   }, []);
+
+  useEffect(() => {
+    const updateCooldown = () => {
+      const retryTime = renewalRetryAtState ? new Date(renewalRetryAtState).getTime() : 0;
+      const seconds = Math.max(0, Math.ceil((retryTime - Date.now()) / 1000));
+      setRenewalSecondsLeft(seconds);
+      if (seconds === 0 && renewalRetryAtState) setRenewalRetryAtState(null);
+    };
+    updateCooldown();
+    const interval = window.setInterval(updateCooldown, 1000);
+    return () => window.clearInterval(interval);
+  }, [renewalRetryAtState]);
 
   const submitReport = async () => {
     const message = reportMessage.trim();
@@ -204,7 +222,7 @@ export default function SubPageClient({
   };
 
   const requestRenewal = async () => {
-    if (renewalStatus === "sending" || renewalStatus === "success") return;
+    if (renewalStatus === "sending" || renewalStatus === "success" || renewalSecondsLeft > 0) return;
     setRenewalStatus("sending");
     try {
       const response = await fetch(`/api/sub/${slug}/reports`, {
@@ -213,7 +231,11 @@ export default function SubPageClient({
         body: JSON.stringify({ type: "renewal" }),
       });
       if (!response.ok) throw new Error();
+      const data: { retryAt?: unknown } = await response.json();
+      if (typeof data.retryAt !== "string" || Number.isNaN(new Date(data.retryAt).getTime())) throw new Error();
+      setRenewalRetryAtState(data.retryAt);
       setRenewalStatus("success");
+      window.setTimeout(() => setRenewalStatus("idle"), 1500);
     } catch {
       setRenewalStatus("error");
     }
@@ -396,6 +418,10 @@ export default function SubPageClient({
     extraConfigs.length > 0 && amneziaConfigCount === extraConfigs.length
   );
   const hasWhatsNew = whatsNew.trim().length > 0;
+  const renewalHours = Math.floor(renewalSecondsLeft / 3600);
+  const renewalMinutes = Math.floor((renewalSecondsLeft % 3600) / 60);
+  const renewalSeconds = renewalSecondsLeft % 60;
+  const renewalCountdown = `${renewalHours} часа ${String(renewalMinutes).padStart(2, "0")} минут ${String(renewalSeconds).padStart(2, "0")} секунд`;
 
   // Paused subscription
   if (!isActive) {
@@ -427,7 +453,7 @@ export default function SubPageClient({
     return (
       <div
         ref={scrollContainerRef}
-        className="sub-public-page sub-public-state bg-[#0B0B0E] text-white"
+        className="sub-public-page sub-public-state sub-public-state-expired bg-[#0B0B0E] text-white"
         onTouchStart={handlePullStart}
         onTouchMove={handlePullMove}
         onTouchEnd={handlePullEnd}
@@ -457,14 +483,28 @@ export default function SubPageClient({
           <div className="mt-6 px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
             <p className="text-graphite-500 text-xs">Срок действия истёк: {new Date(expiresAt!).toLocaleString("ru-RU")}</p>
           </div>
-          <button
-            type="button"
-            onClick={requestRenewal}
-            disabled={renewalStatus === "sending" || renewalStatus === "success"}
-            className={`sub-renewal-button mt-4 w-full rounded-xl border px-4 py-3 text-sm font-medium disabled:cursor-default ${renewalStatus === "success" ? "is-success" : ""}`}
-          >
-            {renewalStatus === "sending" ? "Отправка..." : renewalStatus === "success" ? "Запрос отправлен" : renewalStatus === "error" ? "Повторить запрос" : "Запросить продление"}
-          </button>
+          {renewalStatus === "success" ? (
+            <button
+              type="button"
+              disabled
+              className="sub-renewal-button is-success mt-4 w-full rounded-xl border px-4 py-3 text-sm font-medium cursor-default"
+            >
+              Запрос отправлен
+            </button>
+          ) : renewalSecondsLeft > 0 ? (
+            <p className="mt-4 rounded-xl border border-red-400/20 bg-white/[0.04] px-4 py-3 text-sm text-graphite-300" aria-live="polite">
+              Повторный запрос возможен через {renewalCountdown}
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={requestRenewal}
+              disabled={renewalStatus === "sending"}
+              className="sub-renewal-button mt-4 w-full rounded-xl border px-4 py-3 text-sm font-medium disabled:cursor-default"
+            >
+              {renewalStatus === "sending" ? "Отправка..." : renewalStatus === "error" ? "Повторить запрос" : "Запросить продление"}
+            </button>
+          )}
         </div>
       </div>
     );
