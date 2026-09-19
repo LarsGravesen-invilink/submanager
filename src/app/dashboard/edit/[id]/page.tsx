@@ -69,6 +69,28 @@ interface RemoteSourceState {
   error?: string;
 }
 
+interface EditableBaseline {
+  name: string;
+  title: string;
+  autoUpdateMinutes: number;
+  clientUpdateHours: number;
+  pageTitle: string;
+  whatsNew: string;
+  showExpiry: boolean;
+  showUpload: boolean;
+  showDownload: boolean;
+  showTotal: boolean;
+  totalTrafficGb: number;
+  usedUploadGb: number;
+  usedDownloadGb: number;
+  extraConfigsTitle: string;
+  extraConfigs: {name: string; key: string}[];
+}
+
+const normalizeExtraConfigs = (configs: {name: string; key: string}[]) => configs
+  .map((config) => ({ name: config.name.trim(), key: config.key.trim() }))
+  .filter((config) => config.name && config.key);
+
 function toDateTimeLocalValue(value: string): string {
   const date = new Date(value);
   const pad = (part: number) => String(part).padStart(2, "0");
@@ -121,6 +143,12 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [showLogs, setShowLogs] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<SubKey | null>(null);
+  const [keyCopied, setKeyCopied] = useState(false);
+  const baselineRef = useRef<EditableBaseline | null>(null);
   const [copied, setCopied] = useState(false);
   const router = useRouter();
 
@@ -154,11 +182,22 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     setTotalTrafficGb(data.totalTrafficGb || 0);
     setUsedUploadGb(data.usedUploadGb || 0);
     setUsedDownloadGb(data.usedDownloadGb || 0);
-    if (data.extraConfigsTitle || (data.extraConfigs && data.extraConfigs.length > 0)) {
-      setEnableExtraConfigs(true);
-      setExtraConfigsTitle(data.extraConfigsTitle || "");
-      setExtraConfigs([...(data.extraConfigs || []), {name: "", key: ""}]);
-    }
+    const normalizedExtras = normalizeExtraConfigs(data.extraConfigs || []);
+    const extrasEnabled = Boolean(data.extraConfigsTitle || normalizedExtras.length > 0);
+    setEnableExtraConfigs(extrasEnabled);
+    setExtraConfigsTitle(data.extraConfigsTitle || "");
+    setExtraConfigs(extrasEnabled ? [...normalizedExtras, {name: "", key: ""}] : [{name: "", key: ""}]);
+    baselineRef.current = {
+      name: data.name.trim(), title: data.title.trim(),
+      autoUpdateMinutes: data.autoUpdateMinutes, clientUpdateHours: data.clientUpdateHours,
+      pageTitle: data.pageTitle || "", whatsNew: data.whatsNew || "",
+      showExpiry: data.showExpiry !== false, showUpload: data.showUpload === true,
+      showDownload: data.showDownload === true, showTotal: data.showTotal === true,
+      totalTrafficGb: data.totalTrafficGb || 0, usedUploadGb: data.usedUploadGb || 0,
+      usedDownloadGb: data.usedDownloadGb || 0,
+      extraConfigsTitle: extrasEnabled ? (data.extraConfigsTitle || "").trim() : "",
+      extraConfigs: extrasEnabled ? normalizedExtras : [],
+    };
     setKeys(data.keys);
     setInitialKeysSignature(JSON.stringify(data.keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled }))));
     setInitialSourcesSignature(JSON.stringify(data.sources.map((s) => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus }))));
@@ -347,25 +386,56 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     );
   };
 
-  const removeSource = async (sourceUrl: string) => {
-    if (!sub) return;
-    // Remove source and its keys
-    const newSources = sub.sources.filter(s => s.url !== sourceUrl);
-    const newKeys = keys.filter(k => k.sourceUrl !== sourceUrl);
-    await fetch(`/api/subscriptions/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sources: newSources.map(s => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus })),
-        keys: newKeys.map(k => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled })),
-      }),
-    });
-    loadSub();
+  const removeSource = async (sourceId: string) => {
+    if (!sub || !window.confirm("Удалить этот источник и его ключи? Несохранённые изменения в остальных полях останутся.")) return;
+    setError(""); setFeedback(""); setDeletingSourceId(sourceId);
+    try {
+      const res = await fetch(`/api/subscriptions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ removeSourceIds: [sourceId] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.removedSourceIds?.includes(sourceId)) {
+        throw new Error(data.error || "Не удалось удалить источник");
+      }
+      const removed = sub.sources.find((source) => source.id === sourceId);
+      const hasDuplicate = removed && sub.sources.some((source) => source.id !== sourceId && source.url === removed.url);
+      setSub((current) => current ? { ...current, sources: current.sources.filter((source) => source.id !== sourceId) } : current);
+      if (removed && !hasDuplicate) {
+        setKeys((current) => current.filter((key) => key.sourceUrl !== removed.url));
+        setInitialKeysSignature((signature) => {
+          try {
+            const initial = JSON.parse(signature) as { sourceUrl: string }[];
+            return JSON.stringify(initial.filter((key) => key.sourceUrl !== removed.url));
+          } catch { return signature; }
+        });
+      }
+      setInitialSourcesSignature((signature) => {
+        try {
+          const initial = JSON.parse(signature) as { url: string }[];
+          let skipped = false;
+          return JSON.stringify(initial.filter((source) => source.url !== removed?.url || skipped ? true : (skipped = true, false)));
+        } catch { return signature; }
+      });
+      setFeedback("Источник удалён");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Ошибка удаления источника");
+    } finally { setDeletingSourceId(null); }
   };
 
   const refreshSources = async () => {
-    await fetch(`/api/subscriptions/${id}/refresh`, { method: "POST" });
-    loadSub();
+    if (!sub || !sub.sources.length) { setError("Нет сохранённых URL-источников для обновления"); return; }
+    setRefreshing(true); setError(""); setFeedback("");
+    try {
+      const res = await fetch(`/api/subscriptions/${id}/refresh`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success !== true) throw new Error(data.error || "Не удалось обновить источники");
+      const failedNote = data.failedSources ? ` Не удалось обновить источников: ${data.failedSources}.` : "";
+      setFeedback(`Обновлено сохранённых источников: ${(data.sources ?? 0) - (data.failedSources ?? 0)} из ${data.sources ?? sub.sources.length}. Обработано ключей: ${data.refreshed ?? 0}.${failedNote}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Ошибка обновления источников");
+    } finally { setRefreshing(false); }
   };
 
   const handleSave = async () => {
@@ -408,18 +478,33 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           lastStatus: "ok",
         })),
       ];
-      const payload: Record<string, unknown> = {
+      const baseline = baselineRef.current;
+      const currentEditable: EditableBaseline = {
         name: name.trim(), title: title.trim(), autoUpdateMinutes, clientUpdateHours,
-        ...(expiryDirty ? { expiresAt: calculateExpiryDate() } : {}), ...(logoUrl !== initialLogoUrl ? { logoUrl } : {}), pageTitle, whatsNew,
-        showExpiry, showUpload, showDownload, showTotal,
+        pageTitle, whatsNew, showExpiry, showUpload, showDownload, showTotal,
         totalTrafficGb, usedUploadGb, usedDownloadGb,
         extraConfigsTitle: enableExtraConfigs ? extraConfigsTitle.trim() : "",
-        extraConfigs: enableExtraConfigs ? extraConfigs
-          .map((c) => ({ name: c.name.trim(), key: c.key.trim() }))
-          .filter((c) => c.name && c.key) : [],
+        extraConfigs: enableExtraConfigs ? normalizeExtraConfigs(extraConfigs) : [],
       };
+      const payload: Record<string, unknown> = {};
+      if (baseline) {
+        (Object.keys(currentEditable) as (keyof EditableBaseline)[]).forEach((field) => {
+          if (field === "extraConfigs") return;
+          if (currentEditable[field] !== baseline[field]) payload[field] = currentEditable[field];
+        });
+        if (JSON.stringify(currentEditable.extraConfigs) !== JSON.stringify(baseline.extraConfigs)) {
+          payload.extraConfigs = currentEditable.extraConfigs;
+        }
+      }
+      if (expiryDirty) payload.expiresAt = calculateExpiryDate();
+      if (logoUrl !== initialLogoUrl) payload.logoUrl = logoUrl;
       if (JSON.stringify(currentKeys) !== initialKeysSignature) payload.keys = currentKeys;
       if (JSON.stringify(currentSources) !== initialSourcesSignature) payload.sources = currentSources;
+
+      if (Object.keys(payload).length === 0) {
+        router.push("/dashboard");
+        return;
+      }
 
       const res = await fetch(`/api/subscriptions/${id}`, {
         method: "PUT",
@@ -537,10 +622,10 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
                     </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-graphite-200 truncate">{key.customName || key.originalName || key.keyValue.slice(0, 50)}</p>
-                    <p className="text-xs text-graphite-500 truncate">{key.sourceType === "remote" ? `Источник: ${key.sourceUrl}` : "Вручную"}</p>
-                  </div>
+                   <button type="button" onClick={() => { setSelectedKey(key); setKeyCopied(false); }} className="flex-1 min-w-0 text-left rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500/50" title="Показать полный ключ">
+                     <p className="text-sm text-graphite-200 truncate">{key.customName || key.originalName || key.keyValue.slice(0, 50)}</p>
+                     <p className="text-xs text-graphite-500 truncate">{key.sourceType === "remote" ? `Источник: ${key.sourceUrl}` : "Вручную"}</p>
+                   </button>
                   <button onClick={() => setKeys((p) => p.filter((k) => k.id !== key.id))} className="text-graphite-600 hover:text-red-400 transition-colors flex-shrink-0">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                   </button>
@@ -556,22 +641,25 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
 
         {/* Sources */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-graphite-100">Источники ({sub.sources.length})</h2>
-            <button onClick={refreshSources} className="text-xs text-accent-400 hover:text-accent-300 transition-colors flex items-center gap-1">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              Обновить все
-            </button>
-          </div>
+           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+             <div>
+               <h2 className="text-lg font-semibold text-graphite-100">Источники ({sub.sources.length})</h2>
+               <p className="text-xs text-graphite-500 mt-1">Принудительно загрузить ключи из всех сохранённых URL-источников. Несохранённые источники не обновляются.</p>
+             </div>
+             <button type="button" onClick={refreshSources} disabled={refreshing || sub.sources.length === 0} className="px-4 py-2 rounded-xl bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0">
+               <svg className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+               {refreshing ? "Обновление..." : "Обновить сейчас"}
+             </button>
+           </div>
           {sub.sources.length > 0 && (
             <div className="space-y-2 mb-4">
               {sub.sources.map((src) => (
                 <div key={src.id} className="flex items-center gap-2 bg-graphite-800/50 rounded-xl p-3">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${src.lastStatus === "ok" ? "bg-emerald-400" : src.lastStatus === "error" ? "bg-red-400" : "bg-yellow-400"}`} />
                   <span className="flex-1 text-sm text-graphite-300 font-mono truncate">{src.url}</span>
-                  <button onClick={() => removeSource(src.url)} className="text-graphite-600 hover:text-red-400 transition-colors flex-shrink-0">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
+                   <button type="button" onClick={() => removeSource(src.id)} disabled={deletingSourceId === src.id} className="text-graphite-600 hover:text-red-400 transition-colors flex-shrink-0 disabled:opacity-40" aria-label="Удалить источник">
+                     {deletingSourceId === src.id ? <span className="block w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" /> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
+                   </button>
                 </div>
               ))}
             </div>
@@ -767,6 +855,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           )}
         </section>
 
+        {feedback && <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-xl px-4 py-3">{feedback}</div>}
         {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
 
         <div className="flex gap-3 justify-end pb-8">
@@ -776,6 +865,19 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           </button>
         </div>
       </main>
+      {selectedKey && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedKey(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="key-modal-title" className="w-full max-w-2xl bg-graphite-900 border border-graphite-700 rounded-2xl shadow-2xl p-6">
+            <h3 id="key-modal-title" className="text-lg font-semibold text-graphite-100">Полный ключ</h3>
+            <p className="mt-1 text-sm text-graphite-500">{selectedKey.customName || selectedKey.originalName || "Ключ подписки"}</p>
+            <pre className="mt-4 max-h-[50vh] overflow-auto whitespace-pre-wrap break-all rounded-xl bg-graphite-950 border border-graphite-800 p-4 text-sm text-graphite-200 font-mono select-all">{selectedKey.keyValue}</pre>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setSelectedKey(null)} className="px-5 py-2.5 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-200 hover:bg-graphite-700 transition-colors">Закрыть</button>
+              <button type="button" onClick={async () => { await navigator.clipboard.writeText(selectedKey.keyValue); setKeyCopied(true); setTimeout(() => setKeyCopied(false), 2000); }} className={`px-5 py-2.5 rounded-xl text-white font-medium transition-colors ${keyCopied ? "bg-emerald-600" : "bg-accent-500 hover:bg-accent-600"}`}>{keyCopied ? "Скопировано" : "Копировать"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -74,6 +74,7 @@ export async function POST(
 
   const validateKeys = await getValidateKeys();
   let totalRefreshed = 0;
+  let failedSources = 0;
 
   const fetched: FetchedSource[] = [];
 
@@ -100,6 +101,7 @@ export async function POST(
     }
 
     if (!ok || keys.length === 0) {
+      failedSources += 1;
       await db
         .update(remoteSources)
         .set({ lastStatus: "error", lastFetchedAt: new Date() })
@@ -115,5 +117,5 @@ export async function POST(
     totalRefreshed += r.added + r.updated + r.excluded;
   }
 
-  return NextResponse.json({ success: true, refreshed: totalRefreshed });
+  return NextResponse.json({ success: true, refreshed: totalRefreshed, sources: sources.length, failedSources });
 }

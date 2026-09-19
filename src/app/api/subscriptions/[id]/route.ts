@@ -8,7 +8,7 @@ import {
   settings,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
 import { filterAliveKeys } from "@/lib/keyHealth";
 
@@ -81,6 +81,57 @@ export async function PUT(
 
   try {
     const body = await req.json();
+
+    if (body.removeSourceIds !== undefined) {
+      if (!Array.isArray(body.removeSourceIds) || body.removeSourceIds.some((sourceId: unknown) => typeof sourceId !== "string")) {
+        return NextResponse.json({ error: "Неверный формат идентификаторов источников" }, { status: 400 });
+      }
+
+      const sourceIds = [...new Set(body.removeSourceIds as string[])];
+      if (sourceIds.length === 0) {
+        return NextResponse.json({ success: true, removedSourceIds: [], removedKeys: 0 });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const [ownedSubscription] = await tx
+          .select({ id: subscriptions.id })
+          .from(subscriptions)
+          .where(eq(subscriptions.id, id))
+          .limit(1);
+        if (!ownedSubscription) return null;
+
+        const removedSourceIds: string[] = [];
+        let removedKeys = 0;
+        for (const sourceId of sourceIds) {
+          const [source] = await tx
+            .select({ id: remoteSources.id, url: remoteSources.url })
+            .from(remoteSources)
+            .where(and(eq(remoteSources.id, sourceId), eq(remoteSources.subscriptionId, id)))
+            .limit(1);
+          if (!source) continue;
+
+          const [duplicate] = await tx
+            .select({ id: remoteSources.id })
+            .from(remoteSources)
+            .where(and(eq(remoteSources.subscriptionId, id), eq(remoteSources.url, source.url), ne(remoteSources.id, source.id)))
+            .limit(1);
+
+          if (!duplicate) {
+            const deletedKeys = await tx
+              .delete(subscriptionKeys)
+              .where(and(eq(subscriptionKeys.subscriptionId, id), eq(subscriptionKeys.sourceUrl, source.url)))
+              .returning({ id: subscriptionKeys.id });
+            removedKeys += deletedKeys.length;
+          }
+          await tx.delete(remoteSources).where(and(eq(remoteSources.id, source.id), eq(remoteSources.subscriptionId, id)));
+          removedSourceIds.push(source.id);
+        }
+        return { removedSourceIds, removedKeys };
+      });
+
+      if (!result) return NextResponse.json({ error: "Не найдено" }, { status: 404 });
+      return NextResponse.json({ success: true, ...result });
+    }
 
     const validateKeys = await getSmartValidation();
 
