@@ -165,6 +165,7 @@ export default function SubPageClient({
   const [showReportForm, setShowReportForm] = useState(false);
   const [reportMessage, setReportMessage] = useState("");
   const [reportStatus, setReportStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [renewalStatus, setRenewalStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [clientTimeZone, setClientTimeZone] = useState("Europe/Moscow");
   const [pullDistance, setPullDistance] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -199,6 +200,22 @@ export default function SubPageClient({
       setReportMessage("");
     } catch {
       setReportStatus("error");
+    }
+  };
+
+  const requestRenewal = async () => {
+    if (renewalStatus === "sending" || renewalStatus === "success") return;
+    setRenewalStatus("sending");
+    try {
+      const response = await fetch(`/api/sub/${slug}/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "renewal" }),
+      });
+      if (!response.ok) throw new Error();
+      setRenewalStatus("success");
+    } catch {
+      setRenewalStatus("error");
     }
   };
 
@@ -408,7 +425,21 @@ export default function SubPageClient({
   // Expired subscription
   if (isExpired) {
     return (
-      <div className="sub-public-page sub-public-state bg-[#0B0B0E] text-white flex items-center justify-center px-4">
+      <div
+        ref={scrollContainerRef}
+        className="sub-public-page sub-public-state bg-[#0B0B0E] text-white"
+        onTouchStart={handlePullStart}
+        onTouchMove={handlePullMove}
+        onTouchEnd={handlePullEnd}
+        onTouchCancel={handlePullEnd}
+      >
+        <div
+          className={`sub-pull-indicator ${pullDistance > 0 ? "is-visible" : ""}`}
+          style={{ transform: `translate(-50%, ${Math.min(48, pullDistance) - 36}px)`, opacity: Math.min(1, pullDistance / 42) }}
+          aria-hidden="true"
+        >
+          <svg className={pullDistance >= 72 ? "is-ready" : ""} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14m0 0l-5-5m5 5l5-5" /></svg>
+        </div>
         <div
           className="sub-public-state-glow"
           style={{ background: "radial-gradient(circle at center, rgba(248,113,113,0.11), transparent 66%)" }}
@@ -422,14 +453,18 @@ export default function SubPageClient({
           <h1 className="text-2xl font-bold text-red-400 mb-3">
             <span className="b-glitch">Истёк срок использования подписки</span>
           </h1>
-          <p className="text-graphite-400 text-sm leading-relaxed">
-            Для продления обратитесь к владельцу сервиса
-          </p>
+          <p className="text-graphite-400 text-sm leading-relaxed">Для продления обратитесь к владельцу сервиса</p>
           <div className="mt-6 px-4 py-3 bg-white/5 border border-white/10 rounded-xl">
-            <p className="text-graphite-500 text-xs">
-              Срок действия истёк: {new Date(expiresAt!).toLocaleString("ru-RU")}
-            </p>
+            <p className="text-graphite-500 text-xs">Срок действия истёк: {new Date(expiresAt!).toLocaleString("ru-RU")}</p>
           </div>
+          <button
+            type="button"
+            onClick={requestRenewal}
+            disabled={renewalStatus === "sending" || renewalStatus === "success"}
+            className={`sub-renewal-button mt-4 w-full rounded-xl border px-4 py-3 text-sm font-medium disabled:cursor-default ${renewalStatus === "success" ? "is-success" : ""}`}
+          >
+            {renewalStatus === "sending" ? "Отправка..." : renewalStatus === "success" ? "Запрос отправлен" : renewalStatus === "error" ? "Повторить запрос" : "Запросить продление"}
+          </button>
         </div>
       </div>
     );

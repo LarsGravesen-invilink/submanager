@@ -31,6 +31,8 @@ export async function GET() {
     .select({
       subscription: subscriptions,
       unreadReportCount: sql<number>`count(${subscriptionReports.id}) filter (where ${subscriptionReports.isRead} = false)::int`,
+      unreadOrdinaryCount: sql<number>`count(${subscriptionReports.id}) filter (where ${subscriptionReports.isRead} = false and ${subscriptionReports.type} = 'ordinary')::int`,
+      unreadRenewalCount: sql<number>`count(${subscriptionReports.id}) filter (where ${subscriptionReports.isRead} = false and ${subscriptionReports.type} = 'renewal')::int`,
     })
     .from(subscriptions)
     .leftJoin(
@@ -41,9 +43,11 @@ export async function GET() {
     .orderBy(desc(subscriptions.createdAt));
 
   return NextResponse.json(
-    subs.map(({ subscription, unreadReportCount }) => ({
+    subs.map(({ subscription, unreadReportCount, unreadOrdinaryCount, unreadRenewalCount }) => ({
       ...subscription,
       unreadReportCount,
+      unreadOrdinaryCount,
+      unreadRenewalCount,
     }))
   );
 }

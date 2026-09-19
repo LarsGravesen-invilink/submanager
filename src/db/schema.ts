@@ -7,7 +7,9 @@ import {
   uuid,
   json,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // Admin user table - first login creates the admin
 export const admins = pgTable("admins", {
@@ -125,6 +127,7 @@ export const subscriptionReports = pgTable(
       .notNull()
       .references(() => subscriptions.id, { onDelete: "cascade" }),
     message: text("message").notNull(),
+    type: text("type").$type<"ordinary" | "renewal">().notNull().default("ordinary"),
     ip: text("ip").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     isRead: boolean("is_read").notNull().default(false),
@@ -134,6 +137,13 @@ export const subscriptionReports = pgTable(
       table.subscriptionId,
       table.isRead
     ),
+    index("subscription_reports_subscription_type_idx").on(
+      table.subscriptionId,
+      table.type
+    ),
+    uniqueIndex("subscription_reports_outstanding_renewal_idx")
+      .on(table.subscriptionId)
+      .where(sql`${table.type} = 'renewal'`),
   ]
 );
 

@@ -164,6 +164,7 @@ export async function POST(req: Request) {
               id: r.id,
               subscriptionId: insertData.id,
               message: r.message,
+              type: r.type === "renewal" ? "renewal" : "ordinary",
               ip: r.ip ?? "unknown",
               createdAt: new Date(r.createdAt || r.created_at || Date.now()),
               isRead: r.isRead ?? r.is_read ?? false,

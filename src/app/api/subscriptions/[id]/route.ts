@@ -6,6 +6,7 @@ import {
   remoteSources,
   accessLogs,
   settings,
+  subscriptionReports,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
@@ -183,6 +184,11 @@ export async function PUT(
     updateData.accessResetAt = null;
   }
 
+  const previousExpiry = body.expiresAt !== undefined
+    ? (await db.select({ expiresAt: subscriptions.expiresAt }).from(subscriptions).where(eq(subscriptions.id, id)).limit(1))[0]?.expiresAt
+    : undefined;
+  const requestedExpiry = body.expiresAt !== undefined ? (body.expiresAt ? new Date(body.expiresAt) : null) : undefined;
+
   const [sub] = await db
     .update(subscriptions)
     .set(updateData)
@@ -248,6 +254,13 @@ export async function PUT(
         lastStatus: src.lastStatus || "ok",
       });
     }
+  }
+
+  if (previousExpiry && previousExpiry.getTime() < Date.now() && (requestedExpiry === null || (requestedExpiry && requestedExpiry.getTime() > Date.now()))) {
+    await db.delete(subscriptionReports).where(and(
+      eq(subscriptionReports.subscriptionId, id),
+      eq(subscriptionReports.type, "renewal")
+    ));
   }
 
     return NextResponse.json(sub);

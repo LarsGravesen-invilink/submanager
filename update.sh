@@ -108,12 +108,24 @@ CREATE TABLE IF NOT EXISTS subscription_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
     message TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'ordinary' CHECK (type IN ('ordinary', 'renewal')),
     ip TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT NOW() NOT NULL,
     is_read BOOLEAN NOT NULL DEFAULT FALSE
 );
+ALTER TABLE subscription_reports ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'ordinary';
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscription_reports_type_check') THEN
+        ALTER TABLE subscription_reports ADD CONSTRAINT subscription_reports_type_check CHECK (type IN ('ordinary', 'renewal'));
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS subscription_reports_subscription_read_idx
     ON subscription_reports (subscription_id, is_read);
+CREATE INDEX IF NOT EXISTS subscription_reports_subscription_type_idx
+    ON subscription_reports (subscription_id, type);
+CREATE UNIQUE INDEX IF NOT EXISTS subscription_reports_outstanding_renewal_idx
+    ON subscription_reports (subscription_id) WHERE type = 'renewal';
 
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
