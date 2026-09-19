@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 
 const PRESET_COLORS = [
@@ -45,6 +46,7 @@ export default function SettingsPage() {
   const [customColor, setCustomColor] = useState("#c2610a");
 
   const [fontSize, setFontSize] = useState(16);
+  const initialDashboardFontSize = useRef<string | null>(null);
   const [fontFamily, setFontFamily] = useState("-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif");
   const [customFontName, setCustomFontName] = useState("");
   const [customFontUrl, setCustomFontUrl] = useState("");
@@ -100,10 +102,18 @@ export default function SettingsPage() {
     document.documentElement.style.setProperty("--color-accent-400", accentColor);
   }, [accentColor]);
 
-  // Live preview: font size
+  // Live preview: dashboard font size (the media query applies it at >=640px).
   useEffect(() => {
-    document.documentElement.style.fontSize = `${fontSize}px`;
-    return () => { document.documentElement.style.fontSize = ""; };
+    const root = document.documentElement;
+    if (initialDashboardFontSize.current === null) {
+      initialDashboardFontSize.current = root.style.getPropertyValue("--dashboard-font-size");
+    }
+    root.style.setProperty("--dashboard-font-size", `${fontSize}px`);
+    return () => {
+      const initial = initialDashboardFontSize.current;
+      if (initial) root.style.setProperty("--dashboard-font-size", initial);
+      else root.style.removeProperty("--dashboard-font-size");
+    };
   }, [fontSize]);
 
   // Live preview: font family
@@ -328,7 +338,7 @@ export default function SettingsPage() {
   return (
     <div className="h-svh max-h-svh bg-graphite-950 flex flex-col overflow-hidden overscroll-none">
       <header className="shrink-0 z-40 bg-graphite-950/80 backdrop-blur-xl border-b border-graphite-800">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-8 lg:px-10 h-16 flex items-center justify-between">
           <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 text-graphite-400 hover:text-graphite-200 transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             Назад
@@ -338,7 +348,7 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-10 py-6 sm:py-10 space-y-6 sm:space-y-8">
 
         {/* Texts */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-6">
@@ -489,7 +499,10 @@ export default function SettingsPage() {
           </div>
 
           {/* Preview */}
-          <div className="mt-4 p-4 bg-graphite-800/50 rounded-xl border border-graphite-700/50">
+          <div
+            className="mt-4 p-4 bg-graphite-800/50 rounded-xl border border-graphite-700/50 text-[length:var(--settings-preview-font-size)]"
+            style={{ "--settings-preview-font-size": `${fontSize}px` } as CSSProperties}
+          >
             <p className="text-graphite-400 text-xs mb-2">Предпросмотр:</p>
             <p className="text-graphite-100">Привет, мир! Hello, World! 🚀 Подписка активна</p>
           </div>

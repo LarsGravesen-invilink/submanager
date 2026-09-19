@@ -34,7 +34,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     `;
   }
   if (fontSize) {
-    inlineStyles += `font-size: ${fontSize}px;`;
+    inlineStyles += `--dashboard-font-size: ${fontSize}px;`;
   }
 
   const bodyStyle: CSSProperties | undefined = fontFamily ? { fontFamily } : undefined;

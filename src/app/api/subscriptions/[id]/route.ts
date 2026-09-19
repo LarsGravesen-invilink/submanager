@@ -11,6 +11,7 @@ import { getSession } from "@/lib/auth";
 import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
 import { filterAliveKeys } from "@/lib/keyHealth";
+import { isAccessResetMode } from "@/lib/accessReset";
 
 async function getSmartValidation(): Promise<boolean> {
   try {
@@ -174,6 +175,13 @@ export async function PUT(
   if (body.totalTrafficGb !== undefined) updateData.totalTrafficGb = body.totalTrafficGb;
   if (body.usedUploadGb !== undefined) updateData.usedUploadGb = body.usedUploadGb;
   if (body.usedDownloadGb !== undefined) updateData.usedDownloadGb = body.usedDownloadGb;
+  if (body.accessResetMode !== undefined) {
+    if (!isAccessResetMode(body.accessResetMode)) {
+      return NextResponse.json({ error: "Неверный режим сброса статистики" }, { status: 400 });
+    }
+    updateData.accessResetMode = body.accessResetMode;
+    updateData.accessResetAt = null;
+  }
 
   const [sub] = await db
     .update(subscriptions)

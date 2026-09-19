@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { parseSubscriptionContent, isRealKey } from "@/lib/keys";
 import { rawFetch } from "@/lib/fetch";
 import { syncSubscriptionKeys, FetchedSource } from "@/lib/sourceSync";
+import { resetAccessIfDue } from "@/lib/accessReset";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -57,6 +58,12 @@ export async function GET() {
     const allSubs = await db.select().from(subscriptions);
 
     for (const sub of allSubs) {
+      try {
+        await resetAccessIfDue(sub.id);
+      } catch (e) {
+        console.error("Access reset error for subscription", sub.id, e);
+      }
+
       if (!sub.isActive) continue;
 
       const sources = await db

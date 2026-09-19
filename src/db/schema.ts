@@ -39,6 +39,8 @@ export const subscriptions = pgTable("subscriptions", {
   clientUpdateHours: integer("client_update_hours").notNull().default(24),
   uniqueHits: integer("unique_hits").notNull().default(0),
   totalHits: integer("total_hits").notNull().default(0),
+  accessResetMode: text("access_reset_mode").notNull().default("never"),
+  accessResetAt: timestamp("access_reset_at", { withTimezone: true }),
   logoUrl: text("logo_url").default(""),
   logoSize: text("logo_size").default("medium"), // 'small' | 'medium' | 'large'
   pageTitle: text("page_title").default(""),

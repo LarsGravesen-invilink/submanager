@@ -73,7 +73,10 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   // Live system info polling
   useEffect(() => {
     let active = true;
+    let inFlight = false;
     const load = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const response = await fetch("/api/system", { cache: "no-store" });
         if (!response.ok) return;
@@ -81,10 +84,12 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         if (active) setSysInfo(data);
       } catch {
         // Keep the last successful snapshot visible.
+      } finally {
+        inFlight = false;
       }
     };
     load();
-    const interval = setInterval(load, 2000);
+    const interval = setInterval(load, 1000);
     return () => {
       active = false;
       clearInterval(interval);
@@ -235,7 +240,7 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
     <div className="h-svh max-h-svh bg-graphite-950 flex flex-col overflow-hidden overscroll-none">
       {/* System status bar */}
       <div className="shrink-0 bg-graphite-950 border-b border-graphite-800/50 px-4 sm:px-6 lg:px-8 pt-[max(env(safe-area-inset-top),8px)] pb-1">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-4 h-7 text-[10px] text-graphite-500 font-mono">
+        <div className="max-w-[1600px] w-full mx-auto flex items-center justify-center gap-4 h-7 text-[10px] text-graphite-500 font-mono">
           <span>🕐 {sysInfo.time}</span>
           <span>CPU {sysInfo.cpu}</span>
           <span>RAM {sysInfo.ram}</span>
@@ -243,7 +248,7 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         </div>
       </div>
       <header className="shrink-0 z-40 bg-graphite-950/80 backdrop-blur-xl border-b border-graphite-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent-500 to-accent-700 flex items-center justify-center">
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -270,13 +275,13 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain max-w-[1600px] w-full mx-auto px-4 sm:px-8 lg:px-10 py-6 sm:py-10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
             <h2 className="text-2xl font-bold text-graphite-50">Подписки</h2>
             <p className="text-graphite-400 text-sm mt-1">{subs.length === 0 ? "Нет созданных подписок" : `Всего: ${subs.length}`}</p>
           </div>
-          <button onClick={() => router.push("/dashboard/create")} className="inline-flex w-[210px] items-center justify-center gap-2 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white font-bold text-base px-5 py-3 rounded-xl transition-all shadow-lg shadow-accent-500/20 hover:shadow-accent-500/30">
+          <button onClick={() => router.push("/dashboard/create")} className="inline-flex w-[210px] mx-auto sm:mx-0 sm:w-auto items-center justify-center gap-2 bg-graphite-700/70 hover:bg-graphite-700 sm:bg-gradient-to-r sm:from-accent-500 sm:to-accent-600 sm:hover:from-accent-600 sm:hover:to-accent-700 text-white font-bold text-base px-5 sm:px-7 py-3 sm:py-3.5 rounded-xl transition-all shadow-[0_0_18px_rgba(59,130,246,0.22)] sm:shadow-lg sm:shadow-accent-500/20 sm:hover:shadow-accent-500/30">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
             Создать подписку
           </button>

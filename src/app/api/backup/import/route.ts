@@ -10,6 +10,7 @@ import {
 } from "@/db/schema";
 import { getSession } from "@/lib/auth";
 import { eq } from "drizzle-orm";
+import { isAccessResetMode } from "@/lib/accessReset";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -82,9 +83,15 @@ export async function POST(req: Request) {
             : null,
           autoUpdateMinutes: subData.autoUpdateMinutes ?? subData.auto_update_minutes ?? 60,
           clientUpdateHours: subData.clientUpdateHours ?? subData.client_update_hours ?? 24,
-          uniqueHits: subData.uniqueHits ?? subData.unique_hits ?? 0,
-          totalHits: subData.totalHits ?? subData.total_hits ?? 0,
-          logoUrl: subData.logoUrl ?? subData.logo_url ?? "",
+           uniqueHits: subData.uniqueHits ?? subData.unique_hits ?? 0,
+           totalHits: subData.totalHits ?? subData.total_hits ?? 0,
+           accessResetMode: isAccessResetMode(subData.accessResetMode ?? subData.access_reset_mode)
+             ? (subData.accessResetMode ?? subData.access_reset_mode)
+             : "never",
+           accessResetAt: subData.accessResetAt || subData.access_reset_at
+             ? new Date(subData.accessResetAt || subData.access_reset_at)
+             : null,
+           logoUrl: subData.logoUrl ?? subData.logo_url ?? "",
           logoSize: subData.logoSize ?? subData.logo_size ?? "medium",
           pageTitle: subData.pageTitle ?? subData.page_title ?? "",
           showExpiry: subData.showExpiry ?? subData.show_expiry ?? true,

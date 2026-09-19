@@ -204,6 +204,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     client_update_hours INTEGER NOT NULL DEFAULT 24,
     unique_hits INTEGER NOT NULL DEFAULT 0,
     total_hits INTEGER NOT NULL DEFAULT 0,
+    access_reset_mode TEXT NOT NULL DEFAULT 'never' CHECK (access_reset_mode IN ('never', 'daily', 'weekly', 'monthly')),
+    access_reset_at TIMESTAMPTZ,
     logo_url TEXT DEFAULT '',
     logo_size TEXT DEFAULT 'medium',
     page_title TEXT DEFAULT '',
@@ -288,6 +290,15 @@ ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS show_total BOOLEAN NOT NULL D
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS total_traffic_gb INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS used_upload_gb INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS used_download_gb INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS access_reset_mode TEXT NOT NULL DEFAULT 'never';
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS access_reset_at TIMESTAMPTZ;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscriptions_access_reset_mode_check') THEN
+        ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_access_reset_mode_check
+            CHECK (access_reset_mode IN ('never', 'daily', 'weekly', 'monthly'));
+    END IF;
+END $$;
 CREATE TABLE IF NOT EXISTS subscription_reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,

@@ -62,6 +62,7 @@ export default function SubPageClient({
   logoUrl,
   logoSize,
   expiresAt,
+  initialIsExpired,
   isActive,
   extraConfigsTitle,
   extraConfigs,
@@ -75,6 +76,7 @@ export default function SubPageClient({
   logoUrl: string;
   logoSize: string;
   expiresAt: string | null;
+  initialIsExpired: boolean;
   isActive: boolean;
   extraConfigsTitle: string;
   extraConfigs: {name: string; key: string}[];
@@ -89,7 +91,7 @@ export default function SubPageClient({
   const [showClients, setShowClients] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [timeLeft, setTimeLeft] = useState("");
-  const [isExpired, setIsExpired] = useState(false);
+  const [isExpired, setIsExpired] = useState(initialIsExpired);
 
   useEffect(() => {
     setSubUrl(`${window.location.origin}/api/sub/${slug}`);
@@ -97,7 +99,11 @@ export default function SubPageClient({
 
   // Check expiry and countdown timer
   useEffect(() => {
-    if (!expiresAt) return;
+    if (!expiresAt) {
+      setTimeLeft("");
+      setIsExpired(false);
+      return;
+    }
 
     const updateTime = () => {
       const now = new Date().getTime();

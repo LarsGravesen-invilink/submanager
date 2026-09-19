@@ -35,6 +35,8 @@ interface SubData {
   clientUpdateHours: number;
   uniqueHits: number;
   totalHits: number;
+  accessResetMode: "never" | "daily" | "weekly" | "monthly";
+  accessResetAt: string | null;
   logoUrl: string;
   pageTitle: string;
   whatsNew?: string;
@@ -69,11 +71,20 @@ interface RemoteSourceState {
   error?: string;
 }
 
+interface SourceRefreshResult {
+  id: string;
+  url: string;
+  status: "ok" | "error";
+  keyCount: number;
+  reason: string | null;
+}
+
 interface EditableBaseline {
   name: string;
   title: string;
   autoUpdateMinutes: number;
   clientUpdateHours: number;
+  accessResetMode: "never" | "daily" | "weekly" | "monthly";
   pageTitle: string;
   whatsNew: string;
   showExpiry: boolean;
@@ -104,6 +115,9 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [title, setTitle] = useState("");
   const [autoUpdateMinutes, setAutoUpdateMinutes] = useState(60);
   const [clientUpdateHours, setClientUpdateHours] = useState(24);
+  const [accessResetMode, setAccessResetMode] = useState<"never" | "daily" | "weekly" | "monthly">("never");
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resettingAccess, setResettingAccess] = useState(false);
 
   // Expiry
   const [expiryType, setExpiryType] = useState<"none" | "months" | "days" | "hours" | "custom">("none");
@@ -144,6 +158,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [refreshResults, setRefreshResults] = useState<SourceRefreshResult[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<SubKey | null>(null);
@@ -162,6 +177,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     setTitle(data.title);
     setAutoUpdateMinutes(data.autoUpdateMinutes);
     setClientUpdateHours(data.clientUpdateHours);
+    setAccessResetMode(data.accessResetMode || "never");
     if (data.expiresAt) {
       setExpiryType("custom");
       setExpiresAtRaw(toDateTimeLocalValue(data.expiresAt));
@@ -190,6 +206,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     baselineRef.current = {
       name: data.name.trim(), title: data.title.trim(),
       autoUpdateMinutes: data.autoUpdateMinutes, clientUpdateHours: data.clientUpdateHours,
+      accessResetMode: data.accessResetMode || "never",
       pageTitle: data.pageTitle || "", whatsNew: data.whatsNew || "",
       showExpiry: data.showExpiry !== false, showUpload: data.showUpload === true,
       showDownload: data.showDownload === true, showTotal: data.showTotal === true,
@@ -426,13 +443,24 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
 
   const refreshSources = async () => {
     if (!sub || !sub.sources.length) { setError("Нет сохранённых URL-источников для обновления"); return; }
-    setRefreshing(true); setError(""); setFeedback("");
+    setRefreshing(true); setError(""); setFeedback(""); setRefreshResults([]);
     try {
       const res = await fetch(`/api/subscriptions/${id}/refresh`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.success !== true) throw new Error(data.error || "Не удалось обновить источники");
-      const failedNote = data.failedSources ? ` Не удалось обновить источников: ${data.failedSources}.` : "";
-      setFeedback(`Обновлено сохранённых источников: ${(data.sources ?? 0) - (data.failedSources ?? 0)} из ${data.sources ?? sub.sources.length}. Обработано ключей: ${data.refreshed ?? 0}.${failedNote}`);
+      const results: SourceRefreshResult[] = Array.isArray(data.results) ? data.results : [];
+      if (results.length !== sub.sources.length) throw new Error("Сервер вернул неполные результаты обновления");
+      const statuses = new Map(results.map((result) => [result.id, result.status]));
+      const updatedSources = sub.sources.map((source) => ({
+        ...source,
+        lastStatus: statuses.get(source.id) ?? source.lastStatus,
+      }));
+      setSub((current) => current ? { ...current, sources: current.sources.map((source) => ({ ...source, lastStatus: statuses.get(source.id) ?? source.lastStatus })) } : current);
+      setInitialSourcesSignature(JSON.stringify(updatedSources.map((source) => ({ url: source.url, selectedKeys: source.selectedKeys, keyNames: source.keyNames, lastStatus: source.lastStatus }))));
+      setRefreshResults(results);
+      if (results.every((result) => result.status === "ok")) {
+        setFeedback(`Все сохранённые источники обновлены. Обработано ключей: ${data.refreshed ?? 0}.`);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Ошибка обновления источников");
     } finally { setRefreshing(false); }
@@ -480,8 +508,9 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
       ];
       const baseline = baselineRef.current;
       const currentEditable: EditableBaseline = {
-        name: name.trim(), title: title.trim(), autoUpdateMinutes, clientUpdateHours,
-        pageTitle, whatsNew, showExpiry, showUpload, showDownload, showTotal,
+         name: name.trim(), title: title.trim(), autoUpdateMinutes, clientUpdateHours,
+         accessResetMode,
+         pageTitle, whatsNew, showExpiry, showUpload, showDownload, showTotal,
         totalTrafficGb, usedUploadGb, usedDownloadGb,
         extraConfigsTitle: enableExtraConfigs ? extraConfigsTitle.trim() : "",
         extraConfigs: enableExtraConfigs ? normalizeExtraConfigs(extraConfigs) : [],
@@ -524,6 +553,26 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     setSaving(false);
   };
 
+  const resetAccess = async () => {
+    setResettingAccess(true);
+    setError("");
+    setFeedback("");
+    try {
+      const res = await fetch(`/api/subscriptions/${id}/reset-access`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success !== true || data.uniqueHits !== 0 || data.totalHits !== 0 || !Array.isArray(data.logs)) {
+        throw new Error(data.error || "Сервер не подтвердил сброс статистики");
+      }
+      setSub((current) => current ? { ...current, uniqueHits: 0, totalHits: 0, logs: [] } : current);
+      setShowResetModal(false);
+      setFeedback("Статистика и лог обращений сброшены");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Ошибка сброса статистики");
+    } finally {
+      setResettingAccess(false);
+    }
+  };
+
   const copyLink = async () => {
     if (!sub) return;
     await navigator.clipboard.writeText(`${window.location.origin}/api/sub/${sub.slug}`);
@@ -535,7 +584,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   return (
     <div className="h-svh max-h-svh bg-graphite-950 flex flex-col overflow-hidden overscroll-none">
       <header className="shrink-0 z-40 bg-graphite-950/80 backdrop-blur-xl border-b border-graphite-800">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="max-w-[1600px] w-full mx-auto px-4 sm:px-8 lg:px-10 h-16 flex items-center justify-between">
           <button onClick={() => router.push("/dashboard")} className="flex items-center gap-2 text-graphite-400 hover:text-graphite-200 transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>Назад
           </button>
@@ -544,7 +593,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain w-full max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain w-full max-w-[1600px] mx-auto px-4 sm:px-8 lg:px-10 py-6 sm:py-10 space-y-6 sm:space-y-8">
         {/* Link */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
           <div className="flex flex-col sm:flex-row gap-2">
@@ -838,6 +887,26 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           )}
         </section>
 
+        {/* Access statistics */}
+        <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-graphite-100">Сброс статистики доступа</h2>
+              <p className="text-sm text-graphite-500 mt-1">Автоматический сброс выполняется в 00:00 по Москве: еженедельно — в понедельник, ежемесячно — первого числа.</p>
+            </div>
+            <button type="button" onClick={() => { setError(""); setFeedback(""); setShowResetModal(true); }} className="px-5 py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 font-medium transition-colors shrink-0">
+              Сбросить сейчас
+            </button>
+          </div>
+          <label className="block text-sm text-graphite-400 mt-5 mb-1.5">Расписание сброса</label>
+          <select value={accessResetMode} onChange={(e) => setAccessResetMode(e.target.value as typeof accessResetMode)} className="w-full sm:max-w-sm bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-3 text-graphite-100 focus:outline-none focus:ring-2 focus:ring-accent-500/50">
+            <option value="never">Никогда</option>
+            <option value="daily">Ежедневно</option>
+            <option value="weekly">Еженедельно</option>
+            <option value="monthly">Ежемесячно</option>
+          </select>
+        </section>
+
         {/* Logs */}
         <section className="bg-graphite-900 border border-graphite-800 rounded-2xl p-5">
           <button onClick={() => setShowLogs(!showLogs)} className="flex items-center gap-2 w-full text-left">
@@ -848,7 +917,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
             <div className="mt-4 space-y-1.5 max-h-80 overflow-y-auto">
               {sub.logs.length === 0 ? <p className="text-graphite-500 text-sm">Нет обращений</p> : sub.logs.map((log) => (
                 <div key={log.id} className="flex flex-wrap items-center gap-2 text-xs text-graphite-400 bg-graphite-800/30 rounded-lg px-3 py-2">
-                  <span className="font-mono">{log.ip}</span><span className="text-graphite-600">·</span><span>{log.deviceName || "?"}</span><span className="text-graphite-600">·</span><span>{new Date(log.accessedAt).toLocaleString("ru-RU")}</span>
+                  <span className="font-medium text-accent-400">{sub.name}{sub.title ? ` — ${sub.title}` : ""} ({sub.slug})</span><span className="text-graphite-600">·</span><span className="font-mono">{log.ip}</span><span className="text-graphite-600">·</span><span>{log.deviceName || "?"}</span><span className="text-graphite-600">·</span><span>{new Date(log.accessedAt).toLocaleString("ru-RU")}</span>
                 </div>
               ))}
             </div>
@@ -857,6 +926,18 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
 
         {feedback && <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-xl px-4 py-3">{feedback}</div>}
         {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3">{error}</div>}
+        {refreshResults.length > 0 && (
+          <div className="space-y-2">
+            {refreshResults.map((result) => (
+              <div key={result.id} className={`border text-sm rounded-xl px-4 py-3 ${result.status === "ok" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-red-500/10 border-red-500/20 text-red-400"}`}>
+                <div className="font-mono break-all">{result.url}</div>
+                <div className="mt-1">
+                  {result.status === "ok" ? `Ключей: ${result.keyCount}` : result.reason || "Неизвестная ошибка"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="flex gap-3 justify-end pb-8">
           <button onClick={() => router.push("/dashboard")} className="px-6 py-3 rounded-xl text-graphite-400 hover:text-graphite-200 bg-graphite-800 border border-graphite-700 transition-all">Отмена</button>
@@ -865,6 +946,21 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           </button>
         </div>
       </main>
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onMouseDown={(event) => { if (event.target === event.currentTarget && !resettingAccess) setShowResetModal(false); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="reset-access-modal-title" className="w-full max-w-md bg-graphite-900 border border-graphite-700 rounded-2xl shadow-2xl p-6">
+            <h3 id="reset-access-modal-title" className="text-lg font-semibold text-graphite-100">Сбросить статистику доступа?</h3>
+            <p className="mt-2 text-sm leading-relaxed text-graphite-400">Все записи лога подписки «{sub.name}» будут удалены, а счётчики обращений обнулены. Это действие нельзя отменить. Расписание автоматического сброса не изменится.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" disabled={resettingAccess} onClick={() => setShowResetModal(false)} className="px-5 py-2.5 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-200 hover:bg-graphite-700 transition-colors disabled:opacity-50">Отмена</button>
+              <button type="button" disabled={resettingAccess} onClick={resetAccess} className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-medium transition-colors disabled:opacity-50 flex items-center gap-2">
+                {resettingAccess && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {resettingAccess ? "Сброс..." : "Сбросить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {selectedKey && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedKey(null); }}>
           <div role="dialog" aria-modal="true" aria-labelledby="key-modal-title" className="w-full max-w-2xl bg-graphite-900 border border-graphite-700 rounded-2xl shadow-2xl p-6">

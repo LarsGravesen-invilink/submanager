@@ -7,6 +7,18 @@ import {
 } from "@/db/schema";
 import { asc, eq, sql } from "drizzle-orm";
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  Vary: "User-Agent",
+} as const;
+
+function withNoStore(response: NextResponse): NextResponse {
+  for (const [name, value] of Object.entries(NO_STORE_HEADERS)) {
+    response.headers.set(name, value);
+  }
+  return response;
+}
+
 function isLikelyBrowser(ua: string): boolean {
   const clientPatterns = [
     /clash/i, /v2ray/i, /surge/i, /quantumult/i, /shadowrocket/i,
@@ -80,7 +92,7 @@ export async function GET(
     .limit(1);
 
   if (!sub) {
-    return new NextResponse("Not Found", { status: 404 });
+    return withNoStore(new NextResponse("Not Found", { status: 404 }));
   }
 
   const ua = req.headers.get("user-agent") || "";
@@ -112,7 +124,7 @@ export async function GET(
       req.headers.get("x-forwarded-proto") === "https"
         ? `https://${req.headers.get("host")}`
         : `${req.nextUrl.protocol}//${req.headers.get("host")}`;
-    return NextResponse.redirect(`${baseUrl}/s/${slug}`);
+    return withNoStore(NextResponse.redirect(`${baseUrl}/s/${slug}`));
   };
 
   // Browser page loads are redirects, not subscription retrievals.
@@ -180,7 +192,7 @@ export async function GET(
     }
 
     const content = lines.join("\n");
-    return new NextResponse(Buffer.from(content, "utf-8").toString("base64"), {
+    return withNoStore(new NextResponse(Buffer.from(content, "utf-8").toString("base64"), {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -188,7 +200,7 @@ export async function GET(
         "Profile-Title-Encode": "base64",
         "Profile-Update-Interval": "1",
       },
-    });
+    }));
   }
 
   // ==== Expired ====
@@ -197,7 +209,7 @@ export async function GET(
   if (isExpired) {
     // Dummy key with expiry name so clients like Incy can parse
     const expiredContent = DUMMY_KEY + "#" + encodeURIComponent("ℹ️ПУСТОℹ️");
-    return new NextResponse(Buffer.from(expiredContent, "utf-8").toString("base64"), {
+    return withNoStore(new NextResponse(Buffer.from(expiredContent, "utf-8").toString("base64"), {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -206,7 +218,7 @@ export async function GET(
         "Subscription-Userinfo": `upload=0; download=0; total=0; expire=${Math.floor(new Date(sub.expiresAt!).getTime() / 1000)}`,
         "Profile-Update-Interval": "1",
       },
-    });
+    }));
   }
 
   // ==== VPN Client — return keys ====
@@ -287,5 +299,5 @@ export async function GET(
     headers["Profile-Update-Interval"] = String(sub.clientUpdateHours);
   }
 
-  return new NextResponse(base64Content, { headers });
+  return withNoStore(new NextResponse(base64Content, { headers }));
 }

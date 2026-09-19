@@ -7,6 +7,37 @@ import { parseSubscriptionContent, isRealKey } from "@/lib/keys";
 import { rawFetch } from "@/lib/fetch";
 import { syncSubscriptionKeys, FetchedSource } from "@/lib/sourceSync";
 
+type SourceRefreshResult = {
+  id: string;
+  url: string;
+  status: "ok" | "error";
+  keyCount: number;
+  reason: string | null;
+};
+
+function publicSourceUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password) {
+      url.username = "";
+      url.password = "";
+    }
+    for (const name of Array.from(url.searchParams.keys())) {
+      if (/token|key|auth|pass|password|secret|credential/i.test(name)) {
+        url.searchParams.set(name, "[redacted]");
+      }
+    }
+    return url.toString();
+  } catch {
+    return "Некорректный URL";
+  }
+}
+
+function safeFetchError(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : "Ошибка соединения";
+  return message.replace(/https?:\/\/[^\s)]+/gi, "URL").slice(0, 180);
+}
+
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "v2rayNG/1.8.20",
@@ -74,42 +105,75 @@ export async function POST(
 
   const validateKeys = await getValidateKeys();
   let totalRefreshed = 0;
-  let failedSources = 0;
+  const results: SourceRefreshResult[] = [];
 
   const fetched: FetchedSource[] = [];
 
   for (const source of sources) {
     let keys: string[] = [];
-    let ok = false;
+    let sawEmptyResponse = false;
+    let sawUnsupportedContent = false;
+    let sawDummyKeys = false;
+    let lastHttpStatus: number | null = null;
+    let lastFetchError = "";
 
     for (const ua of USER_AGENTS) {
       try {
         const response = await rawFetch(source.url, ua, { timeoutMs: 15000 });
-        if (response.status < 200 || response.status >= 300) continue;
+        if (response.status < 200 || response.status >= 300) {
+          lastHttpStatus = response.status;
+          continue;
+        }
         const content = response.body;
-        if (!content.trim()) continue;
+        if (!content.trim()) {
+          sawEmptyResponse = true;
+          continue;
+        }
         const parsed = parseSubscriptionContent(content);
         const real = parsed.filter(isRealKey);
         if (real.length > 0) {
           keys = real;
-          ok = true;
           break;
         }
-      } catch {
-        continue;
+        if (parsed.length > 0) sawDummyKeys = true;
+        else sawUnsupportedContent = true;
+      } catch (cause) {
+        lastFetchError = safeFetchError(cause);
       }
     }
 
-    if (!ok || keys.length === 0) {
-      failedSources += 1;
+    if (keys.length === 0) {
+      const reason = sawDummyKeys
+        ? "Источник вернул только ключи-заглушки"
+        : sawUnsupportedContent
+          ? "В ответе нет поддерживаемых ключей"
+          : sawEmptyResponse
+            ? "Источник вернул пустой ответ"
+            : lastHttpStatus !== null
+              ? `HTTP ${lastHttpStatus}`
+              : lastFetchError || "Не удалось получить ответ";
       await db
         .update(remoteSources)
         .set({ lastStatus: "error", lastFetchedAt: new Date() })
         .where(eq(remoteSources.id, source.id));
+      results.push({
+        id: source.id,
+        url: publicSourceUrl(source.url),
+        status: "error",
+        keyCount: 0,
+        reason,
+      });
       continue;
     }
 
     fetched.push({ id: source.id, url: source.url, keys, keyNames: source.keyNames });
+    results.push({
+      id: source.id,
+      url: publicSourceUrl(source.url),
+      status: "ok",
+      keyCount: keys.length,
+      reason: null,
+    });
   }
 
   if (fetched.length) {
@@ -117,5 +181,12 @@ export async function POST(
     totalRefreshed += r.added + r.updated + r.excluded;
   }
 
-  return NextResponse.json({ success: true, refreshed: totalRefreshed, sources: sources.length, failedSources });
+  const failedSources = results.filter((result) => result.status === "error").length;
+  return NextResponse.json({
+    success: true,
+    refreshed: totalRefreshed,
+    sources: sources.length,
+    failedSources,
+    results,
+  });
 }

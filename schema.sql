@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     client_update_hours INTEGER NOT NULL DEFAULT 24,
     unique_hits INTEGER NOT NULL DEFAULT 0,
     total_hits INTEGER NOT NULL DEFAULT 0,
+    access_reset_mode TEXT NOT NULL DEFAULT 'never' CHECK (access_reset_mode IN ('never', 'daily', 'weekly', 'monthly')),
+    access_reset_at TIMESTAMPTZ,
     logo_url TEXT DEFAULT '',
     page_title TEXT DEFAULT '',
     whats_new TEXT DEFAULT ''

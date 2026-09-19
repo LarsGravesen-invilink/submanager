@@ -33,13 +33,17 @@ export default async function SubscriptionPublicPage({
     .orderBy(desc(accessLogs.accessedAt))
     .limit(1);
 
+  const isExpired = sub.expiresAt !== null && sub.expiresAt.getTime() <= Date.now();
+
   return (
     <SubPageClient
+      key={`${sub.id}:${sub.updatedAt.toISOString()}`}
       slug={sub.slug}
       title={sub.pageTitle || sub.title || sub.name}
       logoUrl={sub.logoUrl || ""}
       logoSize={sub.logoSize || "medium"}
       expiresAt={sub.expiresAt ? sub.expiresAt.toISOString() : null}
+      initialIsExpired={isExpired}
       isActive={sub.isActive}
       extraConfigsTitle={sub.extraConfigsTitle || ""}
       extraConfigs={(sub.extraConfigs as {name: string; key: string}[]) || []}
