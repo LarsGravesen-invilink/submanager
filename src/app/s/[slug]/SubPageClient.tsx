@@ -378,16 +378,17 @@ export default function SubPageClient({
   const mainExtraConfigIsAmnezia = amneziaConfigCount === 1 || (
     extraConfigs.length > 0 && amneziaConfigCount === extraConfigs.length
   );
+  const hasWhatsNew = whatsNew.trim().length > 0;
 
   // Paused subscription
   if (!isActive) {
     return (
-      <div className="min-h-dvh bg-[#0B0B0E] text-white flex items-center justify-center px-4 relative overflow-hidden">
+      <div className="sub-public-page sub-public-state bg-[#0B0B0E] text-white flex items-center justify-center px-4">
         <div
-          className="b-sphere pointer-events-none absolute -top-40 -right-28 w-[480px] h-[480px] rounded-full"
-          style={{ background: "radial-gradient(circle at center, rgba(240,185,0,0.16), transparent 62%)" }}
+          className="sub-public-state-glow"
+          style={{ background: "radial-gradient(circle at center, rgba(240,185,0,0.12), transparent 66%)" }}
         />
-        <div className="text-center b-anim">
+        <div className="sub-public-state-content text-center b-anim">
           <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-[#F0B900]/10 border-2 border-[#F0B900]/30 flex items-center justify-center">
             <svg className="w-10 h-10 text-[#F0B900]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -407,12 +408,12 @@ export default function SubPageClient({
   // Expired subscription
   if (isExpired) {
     return (
-      <div className="min-h-dvh bg-[#0B0B0E] text-white flex items-center justify-center px-4 relative overflow-hidden">
+      <div className="sub-public-page sub-public-state bg-[#0B0B0E] text-white flex items-center justify-center px-4">
         <div
-          className="b-sphere pointer-events-none absolute -top-40 -right-28 w-[480px] h-[480px] rounded-full"
-          style={{ background: "radial-gradient(circle at center, rgba(248,113,113,0.14), transparent 62%)" }}
+          className="sub-public-state-glow"
+          style={{ background: "radial-gradient(circle at center, rgba(248,113,113,0.11), transparent 66%)" }}
         />
-        <div className="text-center b-anim max-w-md">
+        <div className="sub-public-state-content text-center b-anim">
           <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center">
             <svg className="w-14 h-14 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -479,11 +480,13 @@ export default function SubPageClient({
             style={{ background: "radial-gradient(ellipse at 50% 80%, rgba(240,185,0,0.2), transparent 70%)" }}
           />
           <div className="relative b-anim">
-        <div className="mb-4 flex flex-col items-center gap-2 text-center">
-          <button onClick={() => setShowWhatsNew(true)} className="text-xs font-semibold tracking-wide text-white/75 underline decoration-[#F0B900]/40 underline-offset-4 hover:text-[#F0B900]">
-            Что нового?
-          </button>
-        </div>
+        {hasWhatsNew && (
+          <div className="mb-4 flex flex-col items-center gap-2 text-center">
+            <button onClick={() => setShowWhatsNew(true)} className="text-xs font-semibold tracking-wide text-white/75 underline decoration-[#F0B900]/40 underline-offset-4 hover:text-[#F0B900]">
+              Что нового?
+            </button>
+          </div>
+        )}
         {/* Logo */}
         <div
           className="text-center mb-6 select-none"
@@ -669,7 +672,7 @@ export default function SubPageClient({
         </div>
       )}
 
-      {showWhatsNew && (
+      {showWhatsNew && hasWhatsNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-[6px] p-4">
           <div className="flex max-h-[min(82dvh,620px)] w-full max-w-md flex-col rounded-2xl border border-[#F0B900]/15 bg-[#131417] p-5 shadow-2xl animate-slide-up">
             <h3 className="shrink-0 text-center text-xl font-bold text-[#F0B900]">
@@ -677,7 +680,7 @@ export default function SubPageClient({
             </h3>
             <div className="my-5 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-xl border border-white/[0.06] bg-black/20 px-4 py-3">
               <p className="whitespace-pre-wrap break-words text-sm leading-7 text-white/75">
-                {whatsNew.trim() || "Пока изменений нет, но в скором времени могут появиться."}
+                {whatsNew.trim()}
               </p>
             </div>
             <button
