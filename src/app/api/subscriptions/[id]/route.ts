@@ -207,26 +207,38 @@ export async function PUT(
      const result = await db.transaction(async (tx) => {
        const [existing] = await tx.select().from(subscriptions).where(eq(subscriptions.id, id)).limit(1);
        if (!existing) return null;
-       const oldKeys = await tx.select({ keyValue: subscriptionKeys.keyValue, sortOrder: subscriptionKeys.sortOrder })
-         .from(subscriptionKeys).where(eq(subscriptionKeys.subscriptionId, id));
-       const seen = new Set(oldKeys.map((key) => key.keyValue.trim()));
+        const oldKeys = await tx.select({ id: subscriptionKeys.id, keyValue: subscriptionKeys.keyValue, customName: subscriptionKeys.customName, sortOrder: subscriptionKeys.sortOrder })
+          .from(subscriptionKeys).where(eq(subscriptionKeys.subscriptionId, id));
+        const seen = new Map(oldKeys.map((key) => [keyFingerprint(key.keyValue), key]));
+
        let sortOrder = oldKeys.reduce((max, key) => Math.max(max, key.sortOrder), -1) + 1;
        for (const src of body.addSources as { url: string; selectedKeys: string[]; keyNames: Record<string, string>; lastStatus: string; keys: { value: string; customName: string }[] }[]) {
          await tx.insert(remoteSources).values({
            subscriptionId: id, url: src.url, selectedKeys: src.selectedKeys,
            keyNames: src.keyNames, lastStatus: src.lastStatus,
          });
-         for (const key of src.keys) {
-           const norm = key.value.trim();
-           if (!norm || seen.has(norm)) continue;
-           seen.add(norm);
-           if (alive && !alive.has(norm)) continue;
-           await tx.insert(subscriptionKeys).values({
-             subscriptionId: id, keyValue: key.value, customName: key.customName,
-             originalName: extractKeyName(key.value), sourceType: "remote", sourceUrl: src.url,
-             isEnabled: true, sortOrder: sortOrder++, keyFingerprint: keyFingerprint(key.value),
-           });
-         }
+          for (const key of src.keys) {
+            const norm = key.value.trim();
+            if (!norm) continue;
+            const fp = keyFingerprint(norm);
+            const existingKey = seen.get(fp);
+            if (existingKey) {
+              if (key.customName.trim() && !existingKey.customName) {
+                await tx.update(subscriptionKeys).set({ customName: key.customName.trim() })
+                  .where(eq(subscriptionKeys.id, existingKey.id));
+                existingKey.customName = key.customName.trim();
+              }
+              continue;
+            }
+            if (alive && !alive.has(norm)) continue;
+            const [inserted] = await tx.insert(subscriptionKeys).values({
+              subscriptionId: id, keyValue: key.value, customName: key.customName,
+              originalName: extractKeyName(key.value), sourceType: "remote", sourceUrl: src.url,
+              isEnabled: true, sortOrder: sortOrder++, keyFingerprint: fp,
+            }).returning({ id: subscriptionKeys.id });
+            seen.set(fp, { id: inserted.id, keyValue: key.value, customName: key.customName, sortOrder: sortOrder - 1 });
+          }
+
        }
        const [updated] = await tx.update(subscriptions).set(updateData).where(eq(subscriptions.id, id)).returning();
        const requestedExpiry = body.expiresAt !== undefined ? (body.expiresAt ? new Date(body.expiresAt) : null) : undefined;
@@ -259,14 +271,18 @@ export async function PUT(
       .delete(subscriptionKeys)
       .where(eq(subscriptionKeys.subscriptionId, id));
 
-    // Remove fully identical keys (same value), keep the first occurrence
-    const seenValues = new Set<string>();
+    // Connection fingerprint ignores display names; retain a custom name when duplicates occur.
+    const seenValues = new Map<string, (typeof body.keys)[number]>();
     let dedupedKeys: typeof body.keys = [];
     for (const k of body.keys) {
-      if (!k.value) continue;
-      const norm = k.value.trim();
-      if (seenValues.has(norm)) continue;
-      seenValues.add(norm);
+      if (!k.value?.trim()) continue;
+      const fp = keyFingerprint(k.value);
+      const existing = seenValues.get(fp);
+      if (existing) {
+        if (!existing.customName?.trim() && k.customName?.trim()) existing.customName = k.customName;
+        continue;
+      }
+      seenValues.set(fp, k);
       dedupedKeys.push(k);
     }
 

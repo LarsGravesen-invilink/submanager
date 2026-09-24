@@ -6,6 +6,7 @@ import {
   accessLogs,
 } from "@/db/schema";
 import { asc, eq, sql } from "drizzle-orm";
+import { keyFingerprint } from "@/lib/keys";
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
@@ -230,15 +231,19 @@ export async function GET(
 
   const enabledKeys = keys.filter((k) => k.isEnabled);
 
-  // Remove fully identical keys (same value), keep the first occurrence.
-  // Names may differ — we only dedupe by the actual key value.
-  const seenValues = new Set<string>();
+  // Connection fingerprints ignore display-name fragments and VMess remarks.
+  // Prefer an explicitly named duplicate, preserving the original list position.
+  const byFingerprint = new Map<string, number>();
   const dedupedKeys: typeof enabledKeys = [];
-  for (const k of enabledKeys) {
-    const norm = k.keyValue.trim();
-    if (seenValues.has(norm)) continue;
-    seenValues.add(norm);
-    dedupedKeys.push(k);
+  for (const key of enabledKeys) {
+    const fingerprint = keyFingerprint(key.keyValue);
+    const existingIndex = byFingerprint.get(fingerprint);
+    if (existingIndex !== undefined) {
+      if (!dedupedKeys[existingIndex].customName && key.customName) dedupedKeys[existingIndex] = key;
+      continue;
+    }
+    byFingerprint.set(fingerprint, dedupedKeys.length);
+    dedupedKeys.push(key);
   }
 
   const keyLines = dedupedKeys.map((k) => {

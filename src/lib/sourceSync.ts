@@ -254,7 +254,7 @@ export async function syncSubscriptionKeys(
     for (const k of src.keys) {
       const fp = keyFingerprint(k.trim());
       const nm = extractKeyName(k);
-      if (fp && nm) newKeyNames[fp] = nm;
+      if (fp && nm && !newKeyNames[fp]) newKeyNames[fp] = nm;
     }
     await db
       .update(remoteSources)
