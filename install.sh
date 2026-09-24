@@ -534,6 +534,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     location / {
+        client_max_body_size 32m;
         proxy_pass http://127.0.0.1:${INTERNAL_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
@@ -562,6 +563,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     location / {
+        client_max_body_size 32m;
         proxy_pass http://127.0.0.1:${INTERNAL_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
@@ -584,6 +586,7 @@ server {
     listen ${NGINX_PORT};
     server_name ${DOMAIN};
     location / {
+        client_max_body_size 32m;
         proxy_pass http://127.0.0.1:${INTERNAL_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
@@ -600,6 +603,7 @@ server {
     listen 80;
     server_name ${DOMAIN};
     location / {
+        client_max_body_size 32m;
         proxy_pass http://127.0.0.1:${INTERNAL_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;

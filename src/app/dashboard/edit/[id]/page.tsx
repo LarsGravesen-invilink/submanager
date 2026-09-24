@@ -493,12 +493,14 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           isEnabled: true,
         }))
       );
-      const currentKeys = [
-        ...keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled })),
-        ...newSourceKeys,
-      ];
-      const currentSources = [
-        ...sub.sources.map((s) => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus })),
+      const existingKeys = keys.map((k) => ({ value: k.keyValue, customName: k.customName, sourceType: k.sourceType, sourceUrl: k.sourceUrl, isEnabled: k.isEnabled }));
+      const existingSources = sub.sources.map((s) => ({ url: s.url, selectedKeys: s.selectedKeys, keyNames: s.keyNames, lastStatus: s.lastStatus }));
+      const appendOnly = readyNewSources.length > 0 &&
+        JSON.stringify(existingKeys) === initialKeysSignature &&
+        JSON.stringify(existingSources) === initialSourcesSignature;
+      const currentKeys = appendOnly ? [] : [...existingKeys, ...newSourceKeys];
+      const currentSources = appendOnly ? [] : [
+        ...existingSources,
         ...readyNewSources.map((s) => ({
           url: s.url,
           selectedKeys: s.keys.filter((k) => k.selected).map((k) => k.fingerprint),
@@ -527,8 +529,18 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
       }
       if (expiryDirty) payload.expiresAt = calculateExpiryDate();
       if (logoUrl !== initialLogoUrl) payload.logoUrl = logoUrl;
-      if (JSON.stringify(currentKeys) !== initialKeysSignature) payload.keys = currentKeys;
-      if (JSON.stringify(currentSources) !== initialSourcesSignature) payload.sources = currentSources;
+      if (appendOnly) {
+        payload.addSources = readyNewSources.map((s) => ({
+          url: s.url,
+          selectedKeys: s.keys.filter((k) => k.selected).map((k) => k.fingerprint),
+          keyNames: Object.fromEntries(s.keys.filter((k) => k.customName.trim()).map((k) => [k.fingerprint, k.customName])),
+          lastStatus: "ok",
+          keys: s.keys.filter((k) => k.selected).map((k) => ({ value: k.value, customName: k.customName })),
+        }));
+      } else {
+        if (JSON.stringify(currentKeys) !== initialKeysSignature) payload.keys = currentKeys;
+        if (JSON.stringify(currentSources) !== initialSourcesSignature) payload.sources = currentSources;
+      }
 
       if (Object.keys(payload).length === 0) {
         router.push("/dashboard");

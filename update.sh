@@ -188,6 +188,34 @@ else
   echo -e "  ${YELLOW}⚠${NC} Не удалось прочитать данные БД из .env"
 fi
 
+# Existing installations keep their Nginx site across updates. Raise its request limit
+# for legitimate subscription/key and image payloads without changing other sites.
+NGINX_UPDATED=false
+if [ -d /etc/nginx/sites-enabled ] && command -v nginx >/dev/null 2>&1; then
+  for enabled_site in /etc/nginx/sites-enabled/*; do
+    [ -e "$enabled_site" ] || continue
+    site=$(readlink -f "$enabled_site")
+    case "$site" in /etc/nginx/sites-available/*) ;; *) continue ;; esac
+    grep -Fq "proxy_pass http://127.0.0.1:${INTERNAL_PORT};" "$site" || continue
+    grep -Fq 'client_max_body_size 32m;' "$site" && continue
+    backup=$(mktemp)
+    cp -p "$site" "$backup"
+    sed -i "/proxy_pass http:\/\/127\.0\.0\.1:${INTERNAL_PORT};/i\\        client_max_body_size 32m;" "$site"
+    if nginx -t >/dev/null 2>&1; then
+      NGINX_UPDATED=true
+      rm -f "$backup"
+    else
+      cp -p "$backup" "$site"
+      rm -f "$backup"
+      echo -e "  ${YELLOW}⚠${NC} Не удалось обновить лимит запросов Nginx: $site"
+    fi
+  done
+  if [ "$NGINX_UPDATED" = true ]; then
+    systemctl reload nginx
+    echo -e "  ${GREEN}✓${NC} Лимит запросов Nginx обновлён"
+  fi
+fi
+
 # Запуск
 systemctl restart "$SERVICE_NAME"
 

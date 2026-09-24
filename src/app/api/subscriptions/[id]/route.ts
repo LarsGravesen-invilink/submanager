@@ -184,7 +184,65 @@ export async function PUT(
     updateData.accessResetAt = null;
   }
 
-  const previousExpiry = body.expiresAt !== undefined
+   if (body.addSources !== undefined) {
+     if (body.keys !== undefined || body.sources !== undefined || !Array.isArray(body.addSources) ||
+       body.addSources.some((src: unknown) => {
+         if (!src || typeof src !== "object") return true;
+         const s = src as Record<string, unknown>;
+         return typeof s.url !== "string" || !s.url.trim() ||
+           !Array.isArray(s.selectedKeys) || s.selectedKeys.some((fp: unknown) => typeof fp !== "string") ||
+           !s.keyNames || typeof s.keyNames !== "object" || Array.isArray(s.keyNames) ||
+           Object.values(s.keyNames).some((name) => typeof name !== "string") ||
+           s.lastStatus !== "ok" || !Array.isArray(s.keys) ||
+           s.keys.some((key: unknown) => !key || typeof key !== "object" ||
+             typeof (key as { value?: unknown }).value !== "string" ||
+             typeof (key as { customName?: unknown }).customName !== "string");
+       })) {
+       return NextResponse.json({ error: "Неверный формат новых источников" }, { status: 400 });
+     }
+
+     const candidates = (body.addSources as { keys: { value: string; customName: string }[] }[])
+       .flatMap((src) => src.keys.map((key) => key.value.trim())).filter(Boolean);
+     const alive = validateKeys && candidates.length ? new Set(await filterAliveKeys(candidates)) : null;
+     const result = await db.transaction(async (tx) => {
+       const [existing] = await tx.select().from(subscriptions).where(eq(subscriptions.id, id)).limit(1);
+       if (!existing) return null;
+       const oldKeys = await tx.select({ keyValue: subscriptionKeys.keyValue, sortOrder: subscriptionKeys.sortOrder })
+         .from(subscriptionKeys).where(eq(subscriptionKeys.subscriptionId, id));
+       const seen = new Set(oldKeys.map((key) => key.keyValue.trim()));
+       let sortOrder = oldKeys.reduce((max, key) => Math.max(max, key.sortOrder), -1) + 1;
+       for (const src of body.addSources as { url: string; selectedKeys: string[]; keyNames: Record<string, string>; lastStatus: string; keys: { value: string; customName: string }[] }[]) {
+         await tx.insert(remoteSources).values({
+           subscriptionId: id, url: src.url, selectedKeys: src.selectedKeys,
+           keyNames: src.keyNames, lastStatus: src.lastStatus,
+         });
+         for (const key of src.keys) {
+           const norm = key.value.trim();
+           if (!norm || seen.has(norm)) continue;
+           seen.add(norm);
+           if (alive && !alive.has(norm)) continue;
+           await tx.insert(subscriptionKeys).values({
+             subscriptionId: id, keyValue: key.value, customName: key.customName,
+             originalName: extractKeyName(key.value), sourceType: "remote", sourceUrl: src.url,
+             isEnabled: true, sortOrder: sortOrder++, keyFingerprint: keyFingerprint(key.value),
+           });
+         }
+       }
+       const [updated] = await tx.update(subscriptions).set(updateData).where(eq(subscriptions.id, id)).returning();
+       const requestedExpiry = body.expiresAt !== undefined ? (body.expiresAt ? new Date(body.expiresAt) : null) : undefined;
+       if (existing.expiresAt && existing.expiresAt.getTime() < Date.now() &&
+         (requestedExpiry === null || (requestedExpiry && requestedExpiry.getTime() > Date.now()))) {
+         await tx.delete(subscriptionReports).where(and(
+           eq(subscriptionReports.subscriptionId, id), eq(subscriptionReports.type, "renewal")
+         ));
+       }
+       return updated;
+     });
+     if (!result) return NextResponse.json({ error: "Не найдено" }, { status: 404 });
+     return NextResponse.json(result);
+   }
+
+   const previousExpiry = body.expiresAt !== undefined
     ? (await db.select({ expiresAt: subscriptions.expiresAt }).from(subscriptions).where(eq(subscriptions.id, id)).limit(1))[0]?.expiresAt
     : undefined;
   const requestedExpiry = body.expiresAt !== undefined ? (body.expiresAt ? new Date(body.expiresAt) : null) : undefined;

@@ -230,6 +230,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
 
     location / {
+        client_max_body_size 32m;
         proxy_pass http://127.0.0.1:${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
@@ -251,6 +252,7 @@ server {
     server_name ${DOMAIN};
 
     location / {
+        client_max_body_size 32m;
         proxy_pass http://127.0.0.1:${APP_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
