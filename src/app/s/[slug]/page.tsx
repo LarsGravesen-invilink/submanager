@@ -2,9 +2,30 @@ import { db } from "@/db";
 import { accessLogs, subscriptionReports, subscriptions } from "@/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import type { Metadata } from "next";
 import SubPageClient from "./SubPageClient";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const host = (await headers()).get("host") || "";
+  let hostname = "";
+  try {
+    hostname = new URL(`http://${host}`).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    // An invalid Host header must not prevent the subscription page from loading.
+  }
+
+  const labels = hostname.split(".");
+  const hasSecondLevelSuffix = labels.length > 2 && labels.at(-1)?.length === 2 &&
+    ["ac", "co", "com", "edu", "gov", "net", "org"].includes(labels.at(-2) || "");
+  const domain = labels.length > 2
+    ? labels.slice(hasSecondLevelSuffix ? -3 : -2).join(".")
+    : hostname;
+
+  return { title: `Моя подписка - ${domain === "invilink.ru" ? "InviLink.ru" : domain || "Подписка"}` };
+}
 
 export default async function SubscriptionPublicPage({
   params,
