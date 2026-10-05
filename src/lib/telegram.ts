@@ -25,7 +25,7 @@ export async function telegram(token: string, method: string, payload: Record<st
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
     signal: AbortSignal.timeout(8000), cache: "no-store",
   });
-  const data = await response.json() as { ok: boolean; result?: { message_id?: number; status?: string; id?: number; type?: string }; description?: string };
+  const data = await response.json() as { ok: boolean; result?: { message_id?: number; status?: string; id?: number; type?: string; url?: string }; description?: string };
   if (!data.ok) throw new Error(data.description || "Telegram API error");
   return data.result;
 }

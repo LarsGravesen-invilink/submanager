@@ -3,19 +3,39 @@ import { getSession } from "@/lib/auth";
 import { config, newSecret, saveSetting, telegram } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!await getSession()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (req.nextUrl.searchParams.has("ping")) {
+    try {
+      // A deliberately invalid bot ID tests the Telegram Bot API from this server,
+      // independently of whether the user has saved a valid token or chat ID.
+      const response = await fetch("https://api.telegram.org/bot0:ping/getMe", {
+        signal: AbortSignal.timeout(3000), cache: "no-store",
+      });
+      const data: unknown = await response.json();
+      const reachable = typeof data === "object" && data !== null && "ok" in data &&
+        typeof data.ok === "boolean" && "error_code" in data && typeof data.error_code === "number";
+      return NextResponse.json({ reachable }, { headers: { "Cache-Control": "no-store" } });
+    } catch {
+      return NextResponse.json({ reachable: false }, { headers: { "Cache-Control": "no-store" } });
+    }
+  }
   const cfg = await config();
-  if (!cfg.token && !cfg.chat) return NextResponse.json({ token: "", chat: "", status: "Не настроен" });
-  if (!cfg.token || !cfg.chat || !cfg.origin) return NextResponse.json({ token: cfg.token, chat: cfg.chat, status: "Проверьте данные" });
+  const base = { token: cfg.token, chat: cfg.chat };
+  if (!cfg.token && !cfg.chat) return NextResponse.json({ ...base, status: "Не настроен" });
+  if (!cfg.token || !cfg.chat || !cfg.origin) return NextResponse.json({ ...base, status: "Проверьте данные", detail: "Введите токен и ID чата, затем сохраните настройки" });
   try {
     const bot = await telegram(cfg.token, "getMe", {});
-    const target = await telegram(cfg.token, "getChat", { chat_id: cfg.chat });
-    const member = target?.type === "private" ? { status: "member" } : bot?.id && await telegram(cfg.token, "getChatMember", { chat_id: cfg.chat, user_id: bot.id });
-    const hook = await fetch(`https://api.telegram.org/bot${cfg.token}/getWebhookInfo`, { signal: AbortSignal.timeout(8000), cache: "no-store" });
-    const info = await hook.json() as { ok: boolean; result?: { url: string } };
-    return NextResponse.json({ token: cfg.token, chat: cfg.chat, status: bot && member && member.status !== "left" && member.status !== "kicked" && (target?.type === "private" || member.status === "administrator" || member.status === "creator") && info.ok && info.result?.url === `${cfg.origin}/api/telegram/webhook` ? "Активен" : "Проверьте данные" });
-  } catch { return NextResponse.json({ token: cfg.token, chat: cfg.chat, status: "Проверьте данные" }); }
+    if (!bot?.id) throw new Error();
+  } catch { return NextResponse.json({ ...base, status: "Проверьте данные", detail: "Telegram не подтвердил токен бота" }); }
+  try {
+    await telegram(cfg.token, "getChat", { chat_id: cfg.chat });
+  } catch { return NextResponse.json({ ...base, status: "Проверьте данные", detail: "Бот не видит чат: проверьте ID и добавьте бота в чат (в личном чате сначала нажмите Start)" }); }
+  try {
+    const hook = await telegram(cfg.token, "getWebhookInfo", {});
+    if (hook?.url !== `${cfg.origin}/api/telegram/webhook`) throw new Error();
+  } catch { return NextResponse.json({ ...base, status: "Проверьте данные", detail: "Telegram webhook не подключён. Откройте панель по HTTPS и сохраните настройки повторно" }); }
+  return NextResponse.json({ ...base, status: "Активен" });
 }
 export async function PUT(req: NextRequest) {
   if (!await getSession()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -34,16 +54,22 @@ export async function PUT(req: NextRequest) {
   const previous = await config();
   const secret = previous.secret || newSecret();
   if (token && chat) {
-    try {
-      const bot = await telegram(token, "getMe", {});
-      const target = await telegram(token, "getChat", { chat_id: chat });
-      if (!bot?.id || !target) throw new Error("Invalid bot or chat");
-      if (target.type !== "private") {
+    let bot;
+    try { bot = await telegram(token, "getMe", {}); }
+    catch { return NextResponse.json({ error: "Telegram не подтвердил токен бота. Проверьте токен и доступ сервера к Telegram" }, { status: 400 }); }
+    if (!bot?.id) return NextResponse.json({ error: "Telegram не подтвердил токен бота" }, { status: 400 });
+    let target;
+    try { target = await telegram(token, "getChat", { chat_id: chat }); }
+    catch { return NextResponse.json({ error: "Бот не видит этот ID. Добавьте бота в чат; для личного чата сначала нажмите Start" }, { status: 400 }); }
+    if (target?.type !== "private") {
+      try {
         const member = await telegram(token, "getChatMember", { chat_id: chat, user_id: bot.id });
-        if (!member || member.status === "left" || member.status === "kicked" || (member.status !== "administrator" && member.status !== "creator")) throw new Error("Bot cannot post to this chat");
-      }
+        if (member?.status !== "administrator" && member?.status !== "creator") throw new Error();
+      } catch { return NextResponse.json({ error: "Добавьте бота в группу или канал и назначьте администратором" }, { status: 400 }); }
+    }
+    try {
       await telegram(token, "setWebhook", { url: `${origin}/api/telegram/webhook`, secret_token: secret, allowed_updates: ["message", "channel_post", "callback_query"], drop_pending_updates: false });
-    } catch { return NextResponse.json({ error: "Проверьте данные и доступность Telegram" }, { status: 400 }); }
+    } catch { return NextResponse.json({ error: "Telegram не подключил webhook. Проверьте доступность HTTPS-домена и порт (443 или 8443)" }, { status: 400 }); }
   } else if (previous.token) {
     try { await telegram(previous.token, "deleteWebhook", {}); } catch { /* The previous token may already be invalid. */ }
   }

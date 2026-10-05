@@ -44,6 +44,7 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   const [telegramToken, setTelegramToken] = useState("");
   const [telegramChat, setTelegramChat] = useState("");
   const [telegramStatus, setTelegramStatus] = useState("Не настроен");
+  const [telegramReachable, setTelegramReachable] = useState<boolean | null>(null);
   const [telegramSaving, setTelegramSaving] = useState(false);
   const [telegramFeedback, setTelegramFeedback] = useState("");
   const [telegramFocus, setTelegramFocus] = useState("");
@@ -79,9 +80,40 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
       setTelegramToken(data.token || "");
       setTelegramChat(data.chat || "");
       setTelegramStatus(data.status || "Проверьте данные");
+      setTelegramFeedback(data.detail || "");
       setTelegramLoaded(true);
     } catch { setTelegramStatus("Проверьте данные"); }
   };
+  useEffect(() => {
+    if (!telegramOpen) return;
+    let stopped = false;
+    let inFlight = false;
+    let controller: AbortController | null = null;
+    const ping = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      controller = new AbortController();
+      try {
+        const response = await fetch("/api/telegram/settings?ping=1", { cache: "no-store", signal: controller.signal });
+        if (!response.ok) throw new Error("Ping failed");
+        const result = await response.json();
+        if (!stopped) setTelegramReachable(result.reachable === true);
+      } catch {
+        if (!stopped) setTelegramReachable(false);
+      } finally {
+        inFlight = false;
+        controller = null;
+      }
+    };
+    void ping();
+    const timer = window.setInterval(() => { void ping(); }, 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      controller?.abort();
+      setTelegramReachable(null);
+    };
+  }, [telegramOpen]);
   const saveTelegram = async () => {
     setTelegramSaving(true);
     setTelegramFeedback("");
@@ -474,11 +506,12 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl border border-accent-500/20 bg-graphite-900 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-slide-up">
             <h3 className="text-xl font-semibold text-graphite-100">Настройка Telegram bot</h3>
-            <p className={`mb-6 mt-1 text-sm font-medium ${telegramStatus === "Активен" ? "text-emerald-400" : telegramStatus === "Не настроен" ? "text-graphite-400" : "text-amber-400"}`}><span className="mr-2">●</span>{telegramStatus}</p>
+            <p className={`mt-1 text-sm font-medium ${telegramStatus === "Активен" ? "text-emerald-400" : telegramStatus === "Не настроен" ? "text-graphite-400" : "text-amber-400"}`}><span className="mr-2">●</span>{telegramStatus}</p>
+            <p className={`mb-6 mt-2 text-sm font-medium ${telegramReachable === null ? "text-graphite-400" : telegramReachable ? "text-emerald-400" : "text-red-400"}`} role="status">Соединение с ТГ: {telegramReachable === null ? "Проверка..." : telegramReachable ? "Стабильно" : "Нет доступа"}</p>
             {([["Token бота", telegramToken, setTelegramToken, "Токен от BotFather", "token"], ["ID чата / канала", telegramChat, setTelegramChat, "Числовой ID чата или канала", "chat"]] as const).map(([label, value, setter, hint, field]) => (
               <label key={field} className="mb-4 block text-sm text-graphite-300">{label}
                 <div className="relative mt-2">
-                  <input type={field === "token" ? "password" : "text"} value={value} onChange={e => { setter(e.target.value); setTelegramFeedback(""); }} onFocus={() => setTelegramFocus(field)} onBlur={() => setTelegramFocus("")} placeholder={telegramFocus === field ? "" : hint} autoComplete="off" className="w-full rounded-xl border border-graphite-700 bg-graphite-800 px-4 py-3 pr-12 text-graphite-100 placeholder:text-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/40" />
+                  <input type="text" name={field === "token" ? "telegram-bot-token" : "telegram-chat-id"} value={value} onChange={e => { setter(e.target.value); setTelegramFeedback(""); }} onFocus={() => setTelegramFocus(field)} onBlur={() => setTelegramFocus("")} placeholder={telegramFocus === field ? "" : hint} autoComplete="off" spellCheck={false} className="w-full rounded-xl border border-graphite-700 bg-graphite-800 px-4 py-3 pr-12 text-graphite-100 placeholder:text-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/40" />
                   {value && <button type="button" onClick={() => { setter(""); setTelegramFeedback(""); }} aria-label={`Очистить ${label}`} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-graphite-400 hover:bg-graphite-700 hover:text-white">×</button>}
                 </div>
               </label>
