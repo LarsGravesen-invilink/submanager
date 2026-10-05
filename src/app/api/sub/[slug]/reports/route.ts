@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { subscriptionReports, subscriptions } from "@/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { notifyReport } from "@/lib/telegram";
 
 const MIN_MESSAGE_LENGTH = 10;
 const MAX_MESSAGE_LENGTH = 2000;
@@ -95,6 +96,7 @@ export async function POST(
         return { status: 201, body: { ...created, type, cooldown: false } };
       });
 
+      if (result.status === 201 && "id" in result.body && typeof result.body.id === "string") await notifyReport(sub.id, result.body.id, "renewal");
       return NextResponse.json(result.body, { status: result.status });
     }
 
@@ -102,6 +104,7 @@ export async function POST(
       .insert(subscriptionReports)
       .values({ subscriptionId: sub.id, message, type, ip })
       .returning({ id: subscriptionReports.id, createdAt: subscriptionReports.createdAt });
+    await notifyReport(sub.id, report.id, "ordinary");
     return NextResponse.json(report, { status: 201 });
   } catch (error) {
     console.error("Failed to create subscription report", { slug, type, error });

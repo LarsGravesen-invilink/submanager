@@ -6,6 +6,7 @@ import { parseSubscriptionContent, isRealKey } from "@/lib/keys";
 import { rawFetch } from "@/lib/fetch";
 import { syncSubscriptionKeys, FetchedSource } from "@/lib/sourceSync";
 import { resetAccessIfDue } from "@/lib/accessReset";
+import { notifyExpiry } from "@/lib/telegram";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -54,6 +55,8 @@ export async function GET() {
       .where(eq(settings.key, "smartKeyValidation"))
       .limit(1);
     const validateKeys = validateRow ? validateRow.value !== "false" : true;
+
+    try { await notifyExpiry(); } catch (error) { console.error("Telegram expiry check failed", error); }
 
     const allSubs = await db.select().from(subscriptions);
 

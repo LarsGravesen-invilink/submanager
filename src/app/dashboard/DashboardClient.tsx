@@ -39,6 +39,14 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   const [extendMinutes, setExtendMinutes] = useState(0);
   const [sysInfo, setSysInfo] = useState({ time: "—", cpu: "—", ram: "—", disk: "—" });
   const [showRestart, setShowRestart] = useState(false);
+  const [telegramOpen, setTelegramOpen] = useState(false);
+  const [telegramLoaded, setTelegramLoaded] = useState(false);
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramChat, setTelegramChat] = useState("");
+  const [telegramStatus, setTelegramStatus] = useState("Не настроен");
+  const [telegramSaving, setTelegramSaving] = useState(false);
+  const [telegramFeedback, setTelegramFeedback] = useState("");
+  const [telegramFocus, setTelegramFocus] = useState("");
   const [restarting, setRestarting] = useState(false);
   const [pauseModal, setPauseModal] = useState<Subscription | null>(null);
   const [pauseReason, setPauseReason] = useState("");
@@ -60,6 +68,37 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   const pullDistanceRef = useRef(0);
   const [pullDistance, setPullDistance] = useState(0);
   const [pullRefreshing, setPullRefreshing] = useState(false);
+
+  const openTelegram = async () => {
+    setTelegramOpen(true);
+    if (telegramLoaded) return;
+    try {
+      const response = await fetch("/api/telegram/settings", { cache: "no-store" });
+      if (!response.ok) throw new Error();
+      const data = await response.json();
+      setTelegramToken(data.token || "");
+      setTelegramChat(data.chat || "");
+      setTelegramStatus(data.status || "Проверьте данные");
+      setTelegramLoaded(true);
+    } catch { setTelegramStatus("Проверьте данные"); }
+  };
+  const saveTelegram = async () => {
+    setTelegramSaving(true);
+    setTelegramFeedback("");
+    try {
+      const response = await fetch("/api/telegram/settings", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: telegramToken, chat: telegramChat, origin: window.location.origin }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Не удалось сохранить настройки");
+      setTelegramStatus(data.status);
+      setTelegramFeedback("Настройки бота сохранены");
+    } catch (error) {
+      setTelegramStatus("Проверьте данные");
+      setTelegramFeedback(error instanceof Error ? error.message : "Проверьте данные");
+    } finally { setTelegramSaving(false); }
+  };
 
   const loadSubs = useCallback(async (force = true) => {
     const requestState = subsRequestRef.current;
@@ -337,6 +376,9 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
             <h1 className="text-lg font-semibold text-graphite-100">{initialCfg.headerTitle || "SubManager"}</h1>
           </div>
           <div className="flex items-center gap-3">
+            <button onClick={openTelegram} className="text-graphite-400 hover:text-accent-400 transition-colors" title="Настройка Telegram bot" aria-label="Настройка Telegram bot">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M21.6 4.3a1.2 1.2 0 0 0-1.3-.2L2.8 10.9c-1 .4-1 1.2 0 1.5l4.5 1.5 1.7 5.2c.3.8.8 1 1.4.4l2.5-2.4 4.5 3.3c.8.5 1.3.2 1.5-.7l3-14.1c.2-.6 0-1.1-.3-1.3ZM9 13.5l9.6-6.2-7.4 7.9-.4 2.4L9 13.5Z"/></svg>
+            </button>
             <button onClick={() => router.push("/dashboard/settings")} className="text-graphite-400 hover:text-graphite-200 text-sm transition-colors flex items-center gap-1.5" title="Настройки">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -427,6 +469,26 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
           </div>
         )}
       </main>
+
+      {telegramOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-accent-500/20 bg-graphite-900 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-slide-up">
+            <h3 className="text-xl font-semibold text-graphite-100">Настройка Telegram bot</h3>
+            <p className={`mb-6 mt-1 text-sm font-medium ${telegramStatus === "Активен" ? "text-emerald-400" : telegramStatus === "Не настроен" ? "text-graphite-400" : "text-amber-400"}`}><span className="mr-2">●</span>{telegramStatus}</p>
+            {([["Token бота", telegramToken, setTelegramToken, "Токен от BotFather", "token"], ["ID чата / канала", telegramChat, setTelegramChat, "Числовой ID чата или канала", "chat"]] as const).map(([label, value, setter, hint, field]) => (
+              <label key={field} className="mb-4 block text-sm text-graphite-300">{label}
+                <div className="relative mt-2">
+                  <input type={field === "token" ? "password" : "text"} value={value} onChange={e => { setter(e.target.value); setTelegramFeedback(""); }} onFocus={() => setTelegramFocus(field)} onBlur={() => setTelegramFocus("")} placeholder={telegramFocus === field ? "" : hint} autoComplete="off" className="w-full rounded-xl border border-graphite-700 bg-graphite-800 px-4 py-3 pr-12 text-graphite-100 placeholder:text-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/40" />
+                  {value && <button type="button" onClick={() => { setter(""); setTelegramFeedback(""); }} aria-label={`Очистить ${label}`} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-graphite-400 hover:bg-graphite-700 hover:text-white">×</button>}
+                </div>
+              </label>
+            ))}
+            {telegramFeedback && <p role="status" className={`mb-4 rounded-xl border px-4 py-3 text-sm ${telegramFeedback === "Настройки бота сохранены" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-amber-500/30 bg-amber-500/10 text-amber-400"}`}>{telegramFeedback}</p>}
+            <button type="button" onClick={saveTelegram} disabled={telegramSaving} className="w-full rounded-xl bg-gradient-to-r from-accent-500 to-accent-600 py-3 font-semibold text-white shadow-lg shadow-accent-500/20 transition-all hover:brightness-110 disabled:opacity-50">{telegramSaving ? "Проверка и сохранение..." : "Сохранить"}</button>
+            <button type="button" onClick={() => setTelegramOpen(false)} className="mt-3 w-full rounded-xl border border-graphite-700 bg-graphite-800 py-3 font-medium text-graphite-300 transition-colors hover:text-white">Закрыть</button>
+          </div>
+        </div>
+      )}
 
       {extendModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

@@ -6,6 +6,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { keyFingerprint, extractKeyName } from "@/lib/keys";
 import { filterAliveKeys } from "@/lib/keyHealth";
+import { notifyCreated } from "@/lib/telegram";
 
 export const dynamic = "force-dynamic";
 
@@ -194,6 +195,7 @@ export async function POST(req: Request) {
       }
     }
 
+    await notifyCreated(sub);
     return NextResponse.json(sub);
   } catch (e) {
     console.error("Create subscription error:", e);
