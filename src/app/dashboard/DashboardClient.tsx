@@ -121,13 +121,13 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         const checks: Promise<boolean>[] = [];
         for (let i = 0; i < 3 && !stopped; i++) {
           checks.push(check(i));
-          if (i < 2) await wait(1000);
+          if (i < 2) await wait(2000);
         }
         const results = await Promise.all(checks);
         if (stopped) break;
         if (results.some(Boolean)) {
           setTelegramReachable(true);
-          await wait(1000);
+          await wait(2000);
         } else {
           setTelegramReachable(false);
           for (let seconds = 5; seconds > 0 && !stopped; seconds--) {
@@ -162,7 +162,7 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
       setTelegramFeedback(data.detail ? `Настройки бота сохранены. ${data.detail}` : "Настройки бота сохранены");
     } catch (error) {
       setTelegramStatus("Проверьте данные");
-      setTelegramFeedback(error instanceof Error ? error.message : "Проверьте данные");
+      setTelegramFeedback(error instanceof Error ? error.message : "Проверьте токен и доступ к Telegram API с Вашего сервера");
     } finally { setTelegramSaving(false); }
   };
 
@@ -483,10 +483,10 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         )}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h2 className="text-2xl font-bold text-graphite-50">Подписки</h2>
+            <h2 className="text-2xl font-bold text-graphite-50">Мои подписки</h2>
             <p className="text-graphite-400 text-sm mt-1">{subs.length === 0 ? "Нет созданных подписок" : `Всего: ${subs.length}`}</p>
           </div>
-          <button onClick={() => router.push("/dashboard/create")} className="inline-flex w-[210px] mx-auto sm:mx-0 sm:w-auto items-center justify-center gap-2 bg-graphite-700/70 hover:bg-graphite-700 sm:bg-gradient-to-r sm:from-accent-500 sm:to-accent-600 sm:hover:from-accent-600 sm:hover:to-accent-700 text-white font-bold text-base px-5 sm:px-7 py-3 sm:py-3.5 rounded-xl transition-all shadow-[0_0_18px_rgba(59,130,246,0.22)] sm:shadow-lg sm:shadow-accent-500/20 sm:hover:shadow-accent-500/30">
+          <button onClick={() => router.push("/dashboard/create")} className="inline-flex w-full sm:w-auto mx-auto sm:mx-0 items-center justify-center gap-2 bg-graphite-700/70 hover:bg-graphite-700 sm:bg-gradient-to-r sm:from-accent-500 sm:to-accent-600 sm:hover:from-accent-600 sm:hover:to-accent-700 text-white font-bold text-base px-5 sm:px-7 py-3 sm:py-3.5 rounded-xl transition-all shadow-[0_0_18px_rgba(59,130,246,0.22)] sm:shadow-lg sm:shadow-accent-500/20 sm:hover:shadow-accent-500/30">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
             Создать подписку
           </button>
@@ -540,8 +540,8 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl border border-accent-500/20 bg-graphite-900 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-slide-up">
             <h3 className="text-xl font-semibold text-graphite-100">Настройка Telegram bot</h3>
-            <p className={`mt-1 text-sm font-medium ${telegramStatus === "Активен" ? "text-emerald-400" : telegramStatus === "Не настроен" ? "text-graphite-400" : "text-amber-400"}`}><span className="mr-2">●</span>{telegramStatus}</p>
-             <p className={`mt-2 text-sm font-medium ${telegramReachable === null ? "text-graphite-400" : telegramReachable ? "text-emerald-400" : "text-red-400"}`} role="status">Соединение с ТГ: {telegramReachable === null ? "Проверка..." : telegramReachable ? "Стабильно" : "Нет доступа"}</p>
+            <p className={`mt-1 text-sm font-medium ${telegramStatus === "Активен" ? "text-emerald-400" : telegramStatus === "Не настроен" ? "text-graphite-400" : "text-amber-400"}`}><span className="mr-2">●</span>{telegramStatus === "Проверьте данные" ? <span className="inline-block align-top text-xs leading-5">Проверьте токен и доступ к Telegram API с Вашего сервера</span> : telegramStatus}</p>
+             <p className={`mt-2 text-sm font-medium ${telegramReachable === null ? "text-graphite-400" : telegramReachable ? "text-emerald-400" : "text-red-400"}`} role="status">Состояние: {telegramReachable === null ? "Проверка..." : telegramReachable ? "Стабильно" : "Нет доступа"}</p>
              {telegramRetrySeconds !== null ? (
                <div className="mb-6 mt-3 flex items-center justify-between rounded-xl border border-red-500/20 bg-gradient-to-r from-red-500/10 to-graphite-800/60 px-4 py-3 shadow-inner" role="timer" aria-live="off">
                  <div className="flex items-center gap-2.5"><span className="h-2 w-2 rounded-full bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.6)]" /><span className="text-sm text-graphite-300">Повтор через...</span></div>
