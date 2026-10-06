@@ -45,9 +45,13 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
   const [telegramChat, setTelegramChat] = useState("");
   const [telegramStatus, setTelegramStatus] = useState("Не настроен");
   const [telegramReachable, setTelegramReachable] = useState<boolean | null>(null);
+  const [telegramChecks, setTelegramChecks] = useState<Array<"waiting" | "checking" | "success" | "failed">>(["waiting", "waiting", "waiting"]);
+  const [telegramRetrySeconds, setTelegramRetrySeconds] = useState<number | null>(null);
   const [telegramSaving, setTelegramSaving] = useState(false);
   const [telegramFeedback, setTelegramFeedback] = useState("");
   const [telegramFocus, setTelegramFocus] = useState("");
+  const telegramTokenEditedRef = useRef(false);
+  const telegramChatEditedRef = useRef(false);
   const [restarting, setRestarting] = useState(false);
   const [pauseModal, setPauseModal] = useState<Subscription | null>(null);
   const [pauseReason, setPauseReason] = useState("");
@@ -77,41 +81,71 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
       const response = await fetch("/api/telegram/settings", { cache: "no-store" });
       if (!response.ok) throw new Error();
       const data = await response.json();
-      setTelegramToken(data.token || "");
-      setTelegramChat(data.chat || "");
-      setTelegramStatus(data.status || "Проверьте данные");
-      setTelegramFeedback(data.detail || "");
+      if (!telegramTokenEditedRef.current) setTelegramToken(data.token || "");
+      if (!telegramChatEditedRef.current) setTelegramChat(data.chat || "");
+      if (!telegramTokenEditedRef.current && !telegramChatEditedRef.current) {
+        setTelegramStatus(data.status || "Проверьте данные");
+        setTelegramFeedback(data.detail || "");
+      }
       setTelegramLoaded(true);
     } catch { setTelegramStatus("Проверьте данные"); }
   };
   useEffect(() => {
     if (!telegramOpen) return;
     let stopped = false;
-    let inFlight = false;
-    let controller: AbortController | null = null;
-    const ping = async () => {
-      if (inFlight) return;
-      inFlight = true;
-      controller = new AbortController();
+    let wake: (() => void) | null = null;
+    const controllers = new Set<AbortController>();
+    const wait = (ms: number) => new Promise<void>((resolve) => {
+      const timer = window.setTimeout(() => { wake = null; resolve(); }, ms);
+      wake = () => { window.clearTimeout(timer); wake = null; resolve(); };
+    });
+    const check = async (index: number): Promise<boolean> => {
+      const controller = new AbortController();
+      controllers.add(controller);
+      setTelegramChecks((current) => current.map((state, i) => i === index ? "checking" : state));
+      let reachable = false;
       try {
         const response = await fetch("/api/telegram/settings?ping=1", { cache: "no-store", signal: controller.signal });
         if (!response.ok) throw new Error("Ping failed");
         const result = await response.json();
-        if (!stopped) setTelegramReachable(result.reachable === true);
-      } catch {
-        if (!stopped) setTelegramReachable(false);
-      } finally {
-        inFlight = false;
-        controller = null;
+        reachable = result.reachable === true;
+      } catch { /* An unreachable API is a failed check. */ }
+      finally { controllers.delete(controller); }
+      if (!stopped) setTelegramChecks((current) => current.map((state, i) => i === index ? (reachable ? "success" : "failed") : state));
+      return reachable;
+    };
+    const monitor = async () => {
+      while (!stopped) {
+        setTelegramRetrySeconds(null);
+        setTelegramChecks(["waiting", "waiting", "waiting"]);
+        const checks: Promise<boolean>[] = [];
+        for (let i = 0; i < 3 && !stopped; i++) {
+          checks.push(check(i));
+          if (i < 2) await wait(1000);
+        }
+        const results = await Promise.all(checks);
+        if (stopped) break;
+        if (results.some(Boolean)) {
+          setTelegramReachable(true);
+          await wait(1000);
+        } else {
+          setTelegramReachable(false);
+          for (let seconds = 5; seconds > 0 && !stopped; seconds--) {
+            setTelegramRetrySeconds(seconds);
+            await wait(1000);
+          }
+          if (!stopped) setTelegramReachable(null);
+        }
       }
     };
-    void ping();
-    const timer = window.setInterval(() => { void ping(); }, 1000);
+    void monitor();
     return () => {
       stopped = true;
-      window.clearInterval(timer);
-      controller?.abort();
+      wake?.();
+      for (const controller of controllers) controller.abort();
       setTelegramReachable(null);
+      setTelegramRetrySeconds(null);
+      setTelegramChecks(["waiting", "waiting", "waiting"]);
     };
   }, [telegramOpen]);
   const saveTelegram = async () => {
@@ -125,7 +159,7 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Не удалось сохранить настройки");
       setTelegramStatus(data.status);
-      setTelegramFeedback("Настройки бота сохранены");
+      setTelegramFeedback(data.detail ? `Настройки бота сохранены. ${data.detail}` : "Настройки бота сохранены");
     } catch (error) {
       setTelegramStatus("Проверьте данные");
       setTelegramFeedback(error instanceof Error ? error.message : "Проверьте данные");
@@ -507,12 +541,28 @@ export default function DashboardClient({ initialCfg }: { initialCfg: Record<str
           <div className="w-full max-w-md rounded-2xl border border-accent-500/20 bg-graphite-900 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-slide-up">
             <h3 className="text-xl font-semibold text-graphite-100">Настройка Telegram bot</h3>
             <p className={`mt-1 text-sm font-medium ${telegramStatus === "Активен" ? "text-emerald-400" : telegramStatus === "Не настроен" ? "text-graphite-400" : "text-amber-400"}`}><span className="mr-2">●</span>{telegramStatus}</p>
-            <p className={`mb-6 mt-2 text-sm font-medium ${telegramReachable === null ? "text-graphite-400" : telegramReachable ? "text-emerald-400" : "text-red-400"}`} role="status">Соединение с ТГ: {telegramReachable === null ? "Проверка..." : telegramReachable ? "Стабильно" : "Нет доступа"}</p>
+             <p className={`mt-2 text-sm font-medium ${telegramReachable === null ? "text-graphite-400" : telegramReachable ? "text-emerald-400" : "text-red-400"}`} role="status">Соединение с ТГ: {telegramReachable === null ? "Проверка..." : telegramReachable ? "Стабильно" : "Нет доступа"}</p>
+             {telegramRetrySeconds !== null ? (
+               <div className="mb-6 mt-3 flex items-center justify-between rounded-xl border border-red-500/20 bg-gradient-to-r from-red-500/10 to-graphite-800/60 px-4 py-3 shadow-inner" role="timer" aria-live="off">
+                 <div className="flex items-center gap-2.5"><span className="h-2 w-2 rounded-full bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.6)]" /><span className="text-sm text-graphite-300">Повтор через...</span></div>
+                 <span className="rounded-lg border border-red-500/20 bg-red-500/10 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums text-red-300">{telegramRetrySeconds} с</span>
+               </div>
+             ) : (
+               <div className="mb-6 mt-3 rounded-xl border border-graphite-700/70 bg-gradient-to-br from-graphite-800/80 to-graphite-900 p-3 shadow-inner" aria-label="Три проверки соединения с Telegram">
+                 <div className="mb-2.5 flex items-center justify-between text-[10px] font-medium uppercase tracking-widest text-graphite-500"><span>Проверка Telegram API</span><span className="font-mono tabular-nums">{telegramChecks.filter(check => check === "success" || check === "failed").length} / 3</span></div>
+                 <div className="flex gap-2">{telegramChecks.map((check, index) => (
+                   <div key={index} className={`flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border px-2.5 transition-all duration-300 ${check === "success" ? "border-emerald-500/30 bg-emerald-500/10 shadow-[0_0_14px_rgba(52,211,153,0.1)]" : check === "failed" ? "border-red-500/25 bg-red-500/10" : check === "checking" ? "border-accent-500/40 bg-accent-500/10 shadow-[0_0_14px_rgba(59,130,246,0.15)]" : "border-graphite-700 bg-graphite-800/70"}`} title={`Проверка ${index + 1}: ${check === "success" ? "успешно" : check === "failed" ? "нет доступа" : check === "checking" ? "выполняется" : "ожидание"}`}>
+                     <span className={`font-mono text-xs font-semibold tabular-nums ${check === "success" ? "text-emerald-400" : check === "failed" ? "text-red-400" : check === "checking" ? "text-accent-400" : "text-graphite-500"}`}>0{index + 1}</span>
+                     <span className={`h-1.5 min-w-0 flex-1 rounded-full transition-all duration-300 ${check === "success" ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" : check === "failed" ? "bg-red-400/80" : check === "checking" ? "animate-pulse bg-accent-400" : "bg-graphite-600/60"}`} />
+                   </div>
+                 ))}</div>
+               </div>
+             )}
             {([["Token бота", telegramToken, setTelegramToken, "Токен от BotFather", "token"], ["ID чата / канала", telegramChat, setTelegramChat, "Числовой ID чата или канала", "chat"]] as const).map(([label, value, setter, hint, field]) => (
               <label key={field} className="mb-4 block text-sm text-graphite-300">{label}
                 <div className="relative mt-2">
-                  <input type="text" name={field === "token" ? "telegram-bot-token" : "telegram-chat-id"} value={value} onChange={e => { setter(e.target.value); setTelegramFeedback(""); }} onFocus={() => setTelegramFocus(field)} onBlur={() => setTelegramFocus("")} placeholder={telegramFocus === field ? "" : hint} autoComplete="off" spellCheck={false} className="w-full rounded-xl border border-graphite-700 bg-graphite-800 px-4 py-3 pr-12 text-graphite-100 placeholder:text-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/40" />
-                  {value && <button type="button" onClick={() => { setter(""); setTelegramFeedback(""); }} aria-label={`Очистить ${label}`} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-graphite-400 hover:bg-graphite-700 hover:text-white">×</button>}
+                  <input type="text" name={field === "token" ? "telegram-bot-token" : "telegram-chat-id"} value={value} onChange={e => { if (field === "token") telegramTokenEditedRef.current = true; else telegramChatEditedRef.current = true; setter(e.target.value); setTelegramFeedback(""); }} onFocus={() => setTelegramFocus(field)} onBlur={() => setTelegramFocus("")} placeholder={telegramFocus === field ? "" : hint} autoComplete="off" spellCheck={false} className="w-full rounded-xl border border-graphite-700 bg-graphite-800 px-4 py-3 pr-12 text-graphite-100 placeholder:text-graphite-500 focus:outline-none focus:ring-2 focus:ring-accent-500/40" />
+                  {value && <button type="button" onClick={() => { if (field === "token") telegramTokenEditedRef.current = true; else telegramChatEditedRef.current = true; setter(""); setTelegramFeedback(""); }} aria-label={`Очистить ${label}`} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-graphite-400 hover:bg-graphite-700 hover:text-white">×</button>}
                 </div>
               </label>
             ))}
