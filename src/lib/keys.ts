@@ -8,13 +8,16 @@ const PROTOCOL_PREFIXES = [
   "ssr://",
   "hysteria://",
   "hysteria2://",
+  "hy://",
   "hy2://",
+  "vpn://",
+  "awg://",
   "tuic://",
   "wg://",
   "wireguard://",
 ];
 
-const KEY_REGEX = /(vless|vmess|trojan|ssr?|hysteria2?|hysteria|hy2|tuic|wg|wireguard):\/\/[^\s"'<>]+/gi;
+const KEY_REGEX = /(vless|vmess|trojan|ssr?|hysteria2?|hy2?|vpn|awg|tuic|wg|wireguard):\/\/[^\s"'<>]+/gi;
 
 export function isVpnKey(line: string): boolean {
   const trimmed = line.trim();
@@ -122,6 +125,14 @@ export function validateVpnKey(key: string): boolean {
   if (!isVpnKey(trimmed)) return false;
 
   try {
+    if (/^(?:vpn|awg):\/\//i.test(trimmed)) {
+      return trimmed.slice(trimmed.indexOf("://") + 3).split("#")[0].length > 0;
+    }
+    if (/^(?:hy|hy2|hysteria|hysteria2):\/\//i.test(trimmed)) {
+      const url = new URL(trimmed);
+      const port = url.port ? Number(url.port) : 443;
+      return Boolean(url.hostname) && Number.isInteger(port) && port > 0 && port <= 65535;
+    }
     if (trimmed.startsWith("vmess://")) {
       const json = JSON.parse(
         Buffer.from(trimmed.slice(8), "base64").toString("utf-8")

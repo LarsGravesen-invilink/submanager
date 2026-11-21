@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { applyKeyNameShortcuts } from "@/lib/keyNameShortcuts";
 
 interface ManualKey {
   id: string;
@@ -80,7 +81,7 @@ export default function CreateSubscriptionPage() {
 
   const detectType = (val: string): ManualKey["type"] => {
     if (!val.trim()) return "";
-    const protocols = ["vless://", "vmess://", "trojan://", "ss://", "ssr://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "wg://", "wireguard://"];
+    const protocols = ["vless://", "vmess://", "trojan://", "ss://", "ssr://", "hysteria://", "hysteria2://", "hy://", "hy2://", "vpn://", "awg://", "tuic://", "wg://", "wireguard://"];
     if (protocols.some((p) => val.trim().startsWith(p))) return "key";
     try {
       const url = new URL(val.trim());
@@ -435,15 +436,14 @@ export default function CreateSubscriptionPage() {
                   {entry.type === "key" && (
                     <input
                       value={entry.customName}
-                      onChange={(e) =>
-                        setEntries((prev) =>
-                          prev.map((en) =>
-                            en.id === entry.id
-                              ? { ...en, customName: e.target.value }
-                              : en
-                          )
-                        )
-                      }
+                       onChange={(e) => {
+                         const customName = applyKeyNameShortcuts(e.currentTarget);
+                         setEntries((prev) =>
+                           prev.map((en) =>
+                             en.id === entry.id ? { ...en, customName } : en
+                           )
+                         );
+                       }}
                       className="w-full bg-graphite-800/50 border border-graphite-700/50 rounded-lg px-3 py-2 text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30 transition-all text-sm"
                       placeholder="Имя ключа в клиенте (необязательно)"
                     />
@@ -953,7 +953,7 @@ function SourceEditorModal({
                 </p>
                 <input
                   value={key.customName}
-                  onChange={(e) => onSetName(key.fingerprint, e.target.value)}
+                   onChange={(e) => onSetName(key.fingerprint, applyKeyNameShortcuts(e.currentTarget))}
                   className="mt-1.5 w-full bg-graphite-800 border border-graphite-700/50 rounded-lg px-3 py-1.5 text-sm text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30 transition-all"
                   placeholder={key.name ? `Оригинальное: ${key.name}` : "Имя ключа в клиенте"}
                 />

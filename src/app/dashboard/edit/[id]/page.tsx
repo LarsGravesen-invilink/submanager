@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, use, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { applyKeyNameShortcuts } from "@/lib/keyNameShortcuts";
 
 interface SubKey {
   id: string;
@@ -162,6 +163,8 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
   const [refreshing, setRefreshing] = useState(false);
   const [deletingSourceId, setDeletingSourceId] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<SubKey | null>(null);
+  const [selectedSourceUrl, setSelectedSourceUrl] = useState<string | null>(null);
+  const [pendingSourceKey, setPendingSourceKey] = useState<{ key: SubKey; sourceId: string } | null>(null);
   const [keyCopied, setKeyCopied] = useState(false);
   const baselineRef = useRef<EditableBaseline | null>(null);
   const [copied, setCopied] = useState(false);
@@ -261,7 +264,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
 
   const detectType = (val: string): "key" | "subscription_url" | "unknown" | "" => {
     if (!val.trim()) return "";
-    const protocols = ["vless://", "vmess://", "trojan://", "ss://", "ssr://", "hysteria://", "hysteria2://", "hy2://", "tuic://", "wg://", "wireguard://"];
+    const protocols = ["vless://", "vmess://", "trojan://", "ss://", "ssr://", "hysteria://", "hysteria2://", "hy://", "hy2://", "vpn://", "awg://", "tuic://", "wg://", "wireguard://"];
     if (protocols.some((p) => val.trim().startsWith(p))) return "key";
     try {
       const url = new URL(val.trim());
@@ -403,8 +406,22 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
     );
   };
 
-  const removeSource = async (sourceId: string) => {
-    if (!sub || !window.confirm("Удалить этот источник и его ключи? Несохранённые изменения в остальных полях останутся.")) return;
+  const removeKey = (key: SubKey) => {
+    if (!sub || key.sourceType !== "remote" || !key.sourceUrl) {
+      setKeys((current) => current.filter((item) => item.id !== key.id));
+      return;
+    }
+    const relatedSources = sub.sources.filter((source) => source.url === key.sourceUrl);
+    const dependentKeys = keys.filter((item) => item.sourceType === "remote" && item.sourceUrl === key.sourceUrl);
+    if (relatedSources.length === 1 && dependentKeys.length === 1) {
+      setPendingSourceKey({ key, sourceId: relatedSources[0].id });
+      return;
+    }
+    setKeys((current) => current.filter((item) => item.id !== key.id));
+  };
+
+  const removeSource = async (sourceId: string, confirm = true) => {
+    if (!sub || (confirm && !window.confirm("Удалить этот источник и его ключи? Несохранённые изменения в остальных полях останутся."))) return;
     setError(""); setFeedback(""); setDeletingSourceId(sourceId);
     try {
       const res = await fetch(`/api/subscriptions/${id}`, {
@@ -687,12 +704,12 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
                      <p className="text-sm text-graphite-200 truncate">{key.customName || key.originalName || key.keyValue.slice(0, 50)}</p>
                      <p className="text-xs text-graphite-500 truncate">{key.sourceType === "remote" ? `Источник: ${key.sourceUrl}` : "Вручную"}</p>
                    </button>
-                  <button onClick={() => setKeys((p) => p.filter((k) => k.id !== key.id))} className="text-graphite-600 hover:text-red-400 transition-colors flex-shrink-0">
+                  <button onClick={() => removeKey(key)} className="text-graphite-600 hover:text-red-400 transition-colors flex-shrink-0" aria-label="Удалить ключ">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                   </button>
                 </div>
                 {/* Name field — ALWAYS visible, including mobile */}
-                <input value={key.customName} onChange={(e) => setKeys((p) => p.map((k) => k.id === key.id ? { ...k, customName: e.target.value } : k))}
+                <input value={key.customName} onChange={(e) => { const customName = applyKeyNameShortcuts(e.currentTarget); setKeys((p) => p.map((k) => k.id === key.id ? { ...k, customName } : k)); }}
                   className="mt-2 w-full bg-graphite-800 border border-graphite-700/50 rounded-lg px-3 py-2 text-sm text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30"
                   placeholder={key.originalName ? `Оригинальное: ${key.originalName}` : "Имя ключа в клиенте"} />
               </div>
@@ -717,7 +734,9 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
               {sub.sources.map((src) => (
                 <div key={src.id} className="flex items-center gap-2 bg-graphite-800/50 rounded-xl p-3">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${src.lastStatus === "ok" ? "bg-emerald-400" : src.lastStatus === "error" ? "bg-red-400" : "bg-yellow-400"}`} />
-                  <span className="flex-1 text-sm text-graphite-300 font-mono truncate">{src.url}</span>
+                   <button type="button" onClick={() => setSelectedSourceUrl(src.url)} className="flex-1 min-w-0 text-left rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500/50" title="Показать полный URL источника">
+                     <span className="block text-sm text-graphite-300 font-mono truncate">{src.url}</span>
+                   </button>
                    <button type="button" onClick={() => removeSource(src.id)} disabled={deletingSourceId === src.id} className="text-graphite-600 hover:text-red-400 transition-colors flex-shrink-0 disabled:opacity-40" aria-label="Удалить источник">
                      {deletingSourceId === src.id ? <span className="block w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" /> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>}
                    </button>
@@ -731,7 +750,7 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
               {newSources.map((src) => (
                 <div key={src.id} className="bg-graphite-800/50 border border-graphite-700/50 rounded-xl p-4">
                   <div className="flex items-center gap-3">
-                    <div className="flex-1 truncate font-mono text-sm text-graphite-300">{src.url}</div>
+                     <button type="button" onClick={() => setSelectedSourceUrl(src.url)} className="flex-1 min-w-0 text-left rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500/50" title="Показать полный URL источника"><span className="block truncate font-mono text-sm text-graphite-300">{src.url}</span></button>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {src.status === "pending" && (
                         <div className="w-4 h-4 border-2 border-accent-500 border-t-transparent rounded-full animate-spin" />
@@ -986,6 +1005,28 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
           </div>
         </div>
       )}
+      {selectedSourceUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setSelectedSourceUrl(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="source-url-modal-title" className="w-full max-w-2xl bg-graphite-900 border border-graphite-700 rounded-2xl shadow-2xl p-6">
+            <h3 id="source-url-modal-title" className="text-lg font-semibold text-graphite-100">Полная строка источника</h3>
+            <pre className="mt-4 max-h-[50vh] overflow-auto whitespace-pre-wrap break-all rounded-xl bg-graphite-950 border border-graphite-800 p-4 text-sm text-graphite-200 font-mono select-all">{selectedSourceUrl}</pre>
+            <div className="mt-5 flex justify-end"><button type="button" onClick={() => setSelectedSourceUrl(null)} className="px-5 py-2.5 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-200 hover:bg-graphite-700 transition-colors">Закрыть</button></div>
+          </div>
+        </div>
+      )}
+      {pendingSourceKey && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingSourceKey(null); }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="dependent-source-modal-title" className="w-full max-w-md bg-graphite-900 border border-graphite-700 rounded-2xl shadow-2xl p-6">
+            <h3 id="dependent-source-modal-title" className="text-lg font-semibold text-graphite-100">Удалить источник?</h3>
+            <p className="mt-2 text-sm leading-relaxed text-graphite-400">Этот ключ — единственный в данном источнике. Вместе с ключом можно удалить и зависимый источник из списка.</p>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => setPendingSourceKey(null)} className="px-5 py-2.5 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-200 hover:bg-graphite-700 transition-colors">Отмена</button>
+              <button type="button" onClick={() => { setKeys((current) => current.filter((key) => key.id !== pendingSourceKey.key.id)); setPendingSourceKey(null); }} className="px-5 py-2.5 rounded-xl bg-graphite-800 border border-graphite-700 text-graphite-200 hover:bg-graphite-700 transition-colors">Только ключ</button>
+              <button type="button" onClick={() => { const sourceId = pendingSourceKey.sourceId; setPendingSourceKey(null); void removeSource(sourceId, false); }} className="px-5 py-2.5 rounded-xl bg-red-600 text-white font-medium hover:bg-red-500 transition-colors">Удалить источник</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1038,7 +1079,7 @@ function SourceEditorModal({
                 </p>
                 <input
                   value={key.customName}
-                  onChange={(e) => onSetName(key.fingerprint, e.target.value)}
+                  onChange={(e) => onSetName(key.fingerprint, applyKeyNameShortcuts(e.currentTarget))}
                   className="mt-1.5 w-full bg-graphite-800 border border-graphite-700/50 rounded-lg px-3 py-1.5 text-sm text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30 transition-all"
                   placeholder={key.name ? `Оригинальное: ${key.name}` : "Имя ключа в клиенте"}
                 />
