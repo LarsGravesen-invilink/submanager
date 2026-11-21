@@ -43,17 +43,90 @@ export function normalizeKeyNameInput(value: string, caret: number): { value: st
     const code = COUNTRY_ALIASES[entered] || entered;
     return COUNTRY_CODES.has(code) ? countryFlag(code) : match;
   });
-  return replaceWithCaret(countries.value, countries.caret, /--/g, () => "➜");
+  const symbols = replaceWithCaret(countries.value, countries.caret, /--/g, () => "➜");
+  const bullets = replaceWithCaret(symbols.value, symbols.caret, /\.\./g, () => "•");
+  const leftBrackets = replaceWithCaret(bullets.value, bullets.caret, /\(\(/g, () => "❰");
+  return replaceWithCaret(leftBrackets.value, leftBrackets.caret, /\)\)/g, () => "❱");
+}
+
+function setKeyNameCaret(input: HTMLInputElement, caret: number): void {
+  if (typeof window !== "undefined") {
+    window.requestAnimationFrame(() => {
+      if (document.activeElement === input) input.setSelectionRange(caret, caret);
+    });
+  }
+}
+
+function isRegionalIndicator(value: string): boolean {
+  const point = value.codePointAt(0) || 0;
+  return point >= 0x1F1E6 && point <= 0x1F1FF;
+}
+
+function flagRanges(value: string): Array<{ start: number; end: number }> {
+  const chars = Array.from(value);
+  const ranges: Array<{ start: number; end: number }> = [];
+  let offset = 0;
+  for (let i = 0; i < chars.length;) {
+    if (!isRegionalIndicator(chars[i])) {
+      offset += chars[i].length;
+      i++;
+      continue;
+    }
+    const runStart = offset;
+    let end = i;
+    let runLength = 0;
+    while (end < chars.length && isRegionalIndicator(chars[end])) {
+      runLength += chars[end].length;
+      end++;
+    }
+    let pairOffset = runStart;
+    for (let pair = 0; pair + 1 < end - i; pair += 2) {
+      const pairLength = chars[i + pair].length + chars[i + pair + 1].length;
+      ranges.push({ start: pairOffset, end: pairOffset + pairLength });
+      pairOffset += pairLength;
+    }
+    offset = runStart + runLength;
+    i = end;
+  }
+  return ranges;
+}
+
+/** Returns a full-flag deletion for Backspace/Delete, or null for ordinary text. */
+export function deleteKeyNameFlag(input: HTMLInputElement, key: string): { value: string; caret: number } | null {
+  if (key !== "Backspace" && key !== "Delete") return null;
+  let start = input.selectionStart ?? 0;
+  let end = input.selectionEnd ?? start;
+  const ranges = flagRanges(input.value);
+
+  if (start !== end) {
+    for (const range of ranges) {
+      if (start < range.end && end > range.start) {
+        start = Math.min(start, range.start);
+        end = Math.max(end, range.end);
+      }
+    }
+    return { value: input.value.slice(0, start) + input.value.slice(end), caret: start };
+  }
+
+  const range = key === "Backspace"
+    ? ranges.find((item) => start > item.start && start <= item.end)
+    : ranges.find((item) => start >= item.start && start < item.end);
+  if (!range) return null;
+  return {
+    value: input.value.slice(0, range.start) + input.value.slice(range.end),
+    caret: range.start,
+  };
+}
+
+/** Restores a valid cursor position after programmatic input replacement. */
+export function restoreKeyNameCaret(input: HTMLInputElement, caret: number): void {
+  setKeyNameCaret(input, caret);
 }
 
 /** Keeps the insertion point valid after replacing ASCII shortcuts with Unicode emoji. */
 export function applyKeyNameShortcuts(input: HTMLInputElement): string {
   const original = input.value;
   const { value, caret } = normalizeKeyNameInput(original, input.selectionStart ?? original.length);
-  if (value !== original && typeof window !== "undefined") {
-    window.requestAnimationFrame(() => {
-      if (document.activeElement === input) input.setSelectionRange(caret, caret);
-    });
-  }
+  if (value !== original) setKeyNameCaret(input, caret);
   return value;
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, use, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { applyKeyNameShortcuts } from "@/lib/keyNameShortcuts";
+import { applyKeyNameShortcuts, deleteKeyNameFlag, restoreKeyNameCaret } from "@/lib/keyNameShortcuts";
 
 interface SubKey {
   id: string;
@@ -710,6 +710,13 @@ export default function EditSubscriptionPage({ params }: { params: Promise<{ id:
                 </div>
                 {/* Name field — ALWAYS visible, including mobile */}
                 <input value={key.customName} onChange={(e) => { const customName = applyKeyNameShortcuts(e.currentTarget); setKeys((p) => p.map((k) => k.id === key.id ? { ...k, customName } : k)); }}
+                  onKeyDown={(e) => {
+                    const deletion = deleteKeyNameFlag(e.currentTarget, e.key);
+                    if (!deletion) return;
+                    e.preventDefault();
+                    setKeys((current) => current.map((item) => item.id === key.id ? { ...item, customName: deletion.value } : item));
+                    restoreKeyNameCaret(e.currentTarget, deletion.caret);
+                  }}
                   className="mt-2 w-full bg-graphite-800 border border-graphite-700/50 rounded-lg px-3 py-2 text-sm text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30"
                   placeholder={key.originalName ? `Оригинальное: ${key.originalName}` : "Имя ключа в клиенте"} />
               </div>
@@ -1080,6 +1087,13 @@ function SourceEditorModal({
                 <input
                   value={key.customName}
                   onChange={(e) => onSetName(key.fingerprint, applyKeyNameShortcuts(e.currentTarget))}
+                  onKeyDown={(e) => {
+                    const deletion = deleteKeyNameFlag(e.currentTarget, e.key);
+                    if (!deletion) return;
+                    e.preventDefault();
+                    onSetName(key.fingerprint, deletion.value);
+                    restoreKeyNameCaret(e.currentTarget, deletion.caret);
+                  }}
                   className="mt-1.5 w-full bg-graphite-800 border border-graphite-700/50 rounded-lg px-3 py-1.5 text-sm text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30 transition-all"
                   placeholder={key.name ? `Оригинальное: ${key.name}` : "Имя ключа в клиенте"}
                 />

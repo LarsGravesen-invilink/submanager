@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { applyKeyNameShortcuts } from "@/lib/keyNameShortcuts";
+import { applyKeyNameShortcuts, deleteKeyNameFlag, restoreKeyNameCaret } from "@/lib/keyNameShortcuts";
 
 interface ManualKey {
   id: string;
@@ -436,14 +436,17 @@ export default function CreateSubscriptionPage() {
                   {entry.type === "key" && (
                     <input
                       value={entry.customName}
-                       onChange={(e) => {
-                         const customName = applyKeyNameShortcuts(e.currentTarget);
-                         setEntries((prev) =>
-                           prev.map((en) =>
-                             en.id === entry.id ? { ...en, customName } : en
-                           )
-                         );
-                       }}
+                      onChange={(e) => {
+                        const customName = applyKeyNameShortcuts(e.currentTarget);
+                        setEntries((prev) => prev.map((en) => en.id === entry.id ? { ...en, customName } : en));
+                      }}
+                      onKeyDown={(e) => {
+                        const deletion = deleteKeyNameFlag(e.currentTarget, e.key);
+                        if (!deletion) return;
+                        e.preventDefault();
+                        setEntries((prev) => prev.map((en) => en.id === entry.id ? { ...en, customName: deletion.value } : en));
+                        restoreKeyNameCaret(e.currentTarget, deletion.caret);
+                      }}
                       className="w-full bg-graphite-800/50 border border-graphite-700/50 rounded-lg px-3 py-2 text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30 transition-all text-sm"
                       placeholder="Имя ключа в клиенте (необязательно)"
                     />
@@ -555,12 +558,15 @@ export default function CreateSubscriptionPage() {
                 {extraConfigs.map((cfg, idx) => (
                   <div key={idx} className="flex gap-2 items-start">
                     <div className="flex-1 space-y-2">
-                      <input value={cfg.name} onChange={(e) => { const n = [...extraConfigs]; n[idx] = {...n[idx], name: e.target.value}; setExtraConfigs(n); }} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50" placeholder="Название конфига" />
+                      <input value={cfg.name} onChange={(e) => { const n = [...extraConfigs]; n[idx] = {...n[idx], name: e.target.value}; setExtraConfigs(n                          );
+                        }}
+                        className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50" placeholder="Название конфига" />
                       <input value={cfg.key} onChange={(e) => {
                         const n = [...extraConfigs]; n[idx] = {...n[idx], key: e.target.value}; setExtraConfigs(n);
                         // Auto-add new row if last is filled
                         if (idx === extraConfigs.length - 1 && e.target.value.trim()) setExtraConfigs([...n, {name: "", key: ""}]);
-                      }} className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono" placeholder="vpn://... или awg://... или wg://..." />
+                                             }}
+                       className="w-full bg-graphite-800 border border-graphite-700 rounded-xl px-4 py-2.5 text-sm text-graphite-100 placeholder-graphite-500 focus:outline-none focus:ring-1 focus:ring-accent-500/50 font-mono" placeholder="vpn://... или awg://... или wg://..." />
                     </div>
                     {extraConfigs.length > 1 && cfg.key.trim() && (
                       <button onClick={() => setExtraConfigs(extraConfigs.filter((_, i) => i !== idx))} className="mt-2.5 text-graphite-600 hover:text-red-400 transition-colors">
@@ -954,6 +960,13 @@ function SourceEditorModal({
                 <input
                   value={key.customName}
                    onChange={(e) => onSetName(key.fingerprint, applyKeyNameShortcuts(e.currentTarget))}
+                   onKeyDown={(e) => {
+                     const deletion = deleteKeyNameFlag(e.currentTarget, e.key);
+                     if (!deletion) return;
+                     e.preventDefault();
+                     onSetName(key.fingerprint, deletion.value);
+                     restoreKeyNameCaret(e.currentTarget, deletion.caret);
+                   }}
                   className="mt-1.5 w-full bg-graphite-800 border border-graphite-700/50 rounded-lg px-3 py-1.5 text-sm text-graphite-200 placeholder-graphite-600 focus:outline-none focus:ring-1 focus:ring-accent-500/30 transition-all"
                   placeholder={key.name ? `Оригинальное: ${key.name}` : "Имя ключа в клиенте"}
                 />
